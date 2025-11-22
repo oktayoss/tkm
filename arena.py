@@ -46,15 +46,19 @@ def skor_kaydet(veriler):
 def mac_sonu_islemleri(isim, avatar, zorluk, hedef, sonuc):
     veriler = skor_yukle()
     
-    # Kullanıcı yoksa oluştur
+    # Kullanıcı yoksa oluştur veya eski kullanıcıysa eksik verileri tamamla
     if isim not in veriler:
-        veriler[isim] = {
-            "avatar": avatar, "toplam_kupa": 0,
-            "win_kolay": 0, "win_orta": 0, "win_zor": 0,
-            "streaks": {} # Örn: "Kolay_3": 2
-        }
+        veriler[isim] = {}
     
-    # Avatarı güncelle (değiştirdiyse)
+    # Veri yapısını güncelle (Eski kayıtlarda olmayan alanları ekle)
+    if "avatar" not in veriler[isim]: veriler[isim]["avatar"] = avatar
+    if "toplam_kupa" not in veriler[isim]: veriler[isim]["toplam_kupa"] = 0
+    if "win_kolay" not in veriler[isim]: veriler[isim]["win_kolay"] = 0
+    if "win_orta" not in veriler[isim]: veriler[isim]["win_orta"] = 0
+    if "win_zor" not in veriler[isim]: veriler[isim]["win_zor"] = 0
+    if "streaks" not in veriler[isim]: veriler[isim]["streaks"] = {}
+    
+    # Avatarı güncelle
     veriler[isim]["avatar"] = avatar
     
     # Streak Anahtarı (Örn: "Kolay_3")
@@ -69,7 +73,7 @@ def mac_sonu_islemleri(isim, avatar, zorluk, hedef, sonuc):
         key_map = {"Kolay": "win_kolay", "Orta": "win_orta", "Zor": "win_zor"}
         veriler[isim][key_map[zorluk]] += 1
         
-        # 2. Temel Puan Hesapla (Bo3=x1, Bo5=x2, Bo7=x3)
+        # 2. Temel Puan Hesapla
         base_puan = {"Kolay": 1, "Orta": 5, "Zor": 10}
         carpan = {3: 1, 5: 2, 7: 3}
         kazanc = base_puan[zorluk] * carpan[hedef]
@@ -78,7 +82,7 @@ def mac_sonu_islemleri(isim, avatar, zorluk, hedef, sonuc):
         mevcut_streak += 1
         veriler[isim]["streaks"][streak_key] = mevcut_streak
         
-        # 4.maç ve sonrası (yani 3 win üstü) ekstra puan
+        # 4.maç ve sonrası bonus
         if mevcut_streak > 3:
             kazanc += 1
             ekstra_bilgi = f"(🔥 {mevcut_streak}. Seri Bonusu: +1 Kupa)"
@@ -86,10 +90,10 @@ def mac_sonu_islemleri(isim, avatar, zorluk, hedef, sonuc):
         puan_degisimi = kazanc
 
     elif sonuc == "kaybetti":
-        # 1. Streak Sıfırla (Sadece bu moddaki)
+        # 1. Streak Sıfırla
         veriler[isim]["streaks"][streak_key] = 0
         
-        # 2. Ceza Hesapla (İstediğin özel kurallar)
+        # 2. Ceza Hesapla
         ceza = 0
         if zorluk == "Kolay":
             if hedef == 3: ceza = -6
@@ -100,7 +104,7 @@ def mac_sonu_islemleri(isim, avatar, zorluk, hedef, sonuc):
             elif hedef == 5: ceza = -2
             elif hedef == 7: ceza = -1
         elif zorluk == "Zor":
-            ceza = -1 # Her aşamada -1
+            ceza = -1
             
         puan_degisimi = ceza
 
@@ -112,7 +116,6 @@ def mac_sonu_islemleri(isim, avatar, zorluk, hedef, sonuc):
 
 # --- RESİM FONKSİYONU ---
 def resim_goster(hamle, genislik=150):
-    # Resim yoksa emoji, varsa resmi gösterir
     dosya = f"{hamle.lower()}.png"
     if os.path.exists(dosya): st.image(dosya, width=genislik)
     else:
@@ -158,19 +161,22 @@ def giris_sayfasi():
     st.markdown(f"<h1 style='text-align: center;'>⚔️ ARENA MENÜSÜ</h1>", unsafe_allow_html=True)
     st.markdown(f"<h3 style='text-align: center;'>Hoşgeldin {st.session_state.avatar} {st.session_state.isim}</h3>", unsafe_allow_html=True)
     
-    # Ayarlar
     c1, c2 = st.columns(2)
     with c1:
         zorluk = st.radio("Zorluk:", ["Kolay", "Orta", "Zor"], horizontal=True)
     with c2:
         hedef = st.radio("Set Türü:", [3, 5, 7], format_func=lambda x: f"Bo{x}", horizontal=True)
     
-    # Win Streak Bilgisi Göster
     st.write("---")
+    
+    # --- HATA VEREN KISIM DÜZELTİLDİ ---
     if st.checkbox("🔥 Aktif Galibiyet Serilerini (Win Streak) Göster"):
         veriler = skor_yukle()
+        # İsim veritabanında var mı?
         if st.session_state.isim in veriler:
-            streaks = veriler[st.session_state.isim]["streaks"]
+            # .get() kullanarak "streaks" anahtarı yoksa hata verme, boş sözlük ver dedik
+            streaks = veriler[st.session_state.isim].get("streaks", {})
+            
             if streaks:
                 st.write("Mevcut Serilerin:")
                 s_cols = st.columns(3)
@@ -180,6 +186,9 @@ def giris_sayfasi():
                         s_cols[i%3].info(f"{mod} Bo{set_sayi}: {v} Seri 🔥")
             else:
                 st.caption("Henüz aktif bir serin yok.")
+        else:
+            st.caption("Henüz kayıtlı maçın yok.")
+    # -----------------------------------
     
     st.write("")
     b1, b2 = st.columns(2)
@@ -224,19 +233,18 @@ def liderlik_sayfasi():
             })
             
         df = pd.DataFrame(liste)
-        # Kupaya göre sırala
-        df = df.sort_values(by="🏆 KUPA", ascending=False)
-        # Sıra numarası ekle (1., 2. ...)
-        df.insert(0, "#", range(1, 1 + len(df)))
-        
-        st.table(df)
+        if not df.empty:
+            df = df.sort_values(by="🏆 KUPA", ascending=False)
+            df.insert(0, "#", range(1, 1 + len(df)))
+            st.table(df)
+        else:
+            st.warning("Tablo oluşturulacak veri bulunamadı.")
         
     if st.button("🏠 Ana Menü"):
         st.session_state.sayfa = 'giris'
         st.rerun()
 
 def oyun_sayfasi():
-    # Başlıklar
     c1, c2, c3 = st.columns([3,2,3])
     with c1:
         st.markdown(f"<h3 style='text-align:center; color:#2980b9'>{st.session_state.avatar} {st.session_state.isim}</h3>", unsafe_allow_html=True)
@@ -247,10 +255,8 @@ def oyun_sayfasi():
         st.markdown(f"<h3 style='text-align:center; color:#c0392b'>Yapay Zeka ({st.session_state.zorluk})</h3>", unsafe_allow_html=True)
         st.markdown(f"<h1 style='text-align:center'>{st.session_state.pc_skor}</h1>", unsafe_allow_html=True)
 
-    # İlerleme Çubuğu
     st.progress(min(st.session_state.oyuncu_skor / st.session_state.hedef, 1.0))
 
-    # --- OYUN BİTTİ EKRANI ---
     if st.session_state.oyun_bitti:
         st.markdown(st.session_state.sonuc_html, unsafe_allow_html=True)
         col1, col2 = st.columns(2)
@@ -269,10 +275,8 @@ def oyun_sayfasi():
                 st.rerun()
         return
 
-    # --- OYUN ALANI ---
     bilgi = st.empty()
     
-    # Seçimleri Göster
     if st.session_state.oyuncu_secimi and st.session_state.pc_secimi:
         ic1, ic2 = st.columns(2)
         with ic1:
@@ -287,7 +291,6 @@ def oyun_sayfasi():
 
     st.write("---")
     
-    # Hamle Butonları
     col1, col2, col3 = st.columns(3)
     with col1: 
         if st.button("🗿 TAŞ", use_container_width=True): hamle_yap("Taş", bilgi)
@@ -306,11 +309,9 @@ def hamle_yap(oyuncu_hamle, bilgi_placeholder):
     st.session_state.pc_secimi = None
     st.session_state.mesaj = ""
     
-    # Animasyon
     bilgi_placeholder.markdown('<p class="dusunuyor">Yapay Zeka Düşünüyor...</p>', unsafe_allow_html=True)
     time.sleep(1.5)
     
-    # Mantık
     secenekler = ["Taş", "Kağıt", "Makas"]
     kazanan = {"Taş": "Kağıt", "Kağıt": "Makas", "Makas": "Taş"}
     kaybeden = {"Taş": "Makas", "Kağıt": "Taş", "Makas": "Kağıt"}
@@ -324,7 +325,6 @@ def hamle_yap(oyuncu_hamle, bilgi_placeholder):
     
     st.session_state.pc_secimi = pc_hamle
     
-    # Sonuç
     if oyuncu_hamle == pc_hamle:
         st.session_state.mesaj = "🤝 BERABERE!"
     elif (oyuncu_hamle=="Taş" and pc_hamle=="Makas") or \
@@ -336,7 +336,6 @@ def hamle_yap(oyuncu_hamle, bilgi_placeholder):
         st.session_state.pc_skor += 1
         st.session_state.mesaj = "❌ KAYBETTİN..."
         
-    # Maç Bitti mi?
     hedef = st.session_state.hedef
     isim = st.session_state.isim
     avatar = st.session_state.avatar
