@@ -3,11 +3,16 @@ import random
 import json
 import os
 import time
-import uuid # Token oluşturmak için
-import pandas as pd # Liderlik tablosu için gerekli
+import uuid
+import pandas as pd
+import extra_streamlit_components as stx # Çerez Yöneticisi
 
 # --- SAYFA AYARLARI ---
 st.set_page_config(page_title="Taş Kağıt Makas Arena", page_icon="🗿", layout="centered")
+
+# --- ÇEREZ YÖNETİCİSİ (COOKIE MANAGER) ---
+# Bu kod tarayıcıdaki çerezleri okur ve yazar
+cookie_manager = stx.CookieManager()
 
 # --- CSS STİLLERİ ---
 st.markdown("""
@@ -24,10 +29,10 @@ st.markdown("""
     .kalkan-kirik { color: #e74c3c; font-weight: bold; text-decoration: line-through; font-size: 18px; }
     .teklif-box { background-color: #3498db; color: white; padding: 15px; border-radius: 10px; animation: pulse 2s infinite; margin-bottom: 10px; }
     
-    /* Güncelleme Notları Stili */
+    /* POP-UP STİLİ (DÜZELTİLDİ) */
     .modal-overlay {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.8); z-index: 99999;
+        background: rgba(0,0,0,0.85); z-index: 99999;
         display: flex; justify-content: center; align-items: center;
     }
     .modal-content {
@@ -35,6 +40,7 @@ st.markdown("""
         border-radius: 15px; width: 90%; max-width: 500px;
         box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid #636e72;
         position: relative; animation: slideIn 0.4s ease-out;
+        text-align: left;
     }
     .modal-header {
         font-size: 24px; font-weight: bold; color: #00cec9;
@@ -66,26 +72,17 @@ USERS_DOSYASI = "users.json"
 
 # --- FONKSİYONLAR ---
 def json_oku(dosya):
-    if not os.path.exists(dosya):
-        return {}
+    if not os.path.exists(dosya): return {}
     try:
-        with open(dosya, "r", encoding="utf-8") as f:
-            return json.load(f)
+        with open(dosya, "r", encoding="utf-8") as f: return json.load(f)
     except:
-        # Dosya meşgulse biraz bekle tekrar dene
         time.sleep(0.1)
-        try:
-            with open(dosya, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except:
-            return {}
+        try: with open(dosya, "r", encoding="utf-8") as f: return json.load(f)
+        except: return {}
 
 def json_yaz(dosya, veri):
-    try:
-        with open(dosya, "w", encoding="utf-8") as f:
-            json.dump(veri, f, ensure_ascii=False, indent=4)
-    except:
-        pass
+    try: with open(dosya, "w", encoding="utf-8") as f: json.dump(veri, f, ensure_ascii=False, indent=4)
+    except: pass
 
 def resim_goster(hamle, genislik=130):
     dosya = f"{hamle.lower()}.png"
@@ -100,7 +97,7 @@ def get_player_data(isim):
 
 def rastgele_soz(durum): return random.choice(SOZLER.get(durum, [""]))
 
-# --- ÜYELİK VE GİRİŞ SİSTEMİ ---
+# --- ÜYELİK SİSTEMİ ---
 def kullanici_kayit(kadi, sifre):
     users = json_oku(USERS_DOSYASI)
     if kadi in users: return False, "Bu kullanıcı adı dolu."
@@ -113,14 +110,16 @@ def kullanici_giris(kadi, sifre):
     users = json_oku(USERS_DOSYASI)
     if kadi not in users: return False, None
     user_data = users[kadi]
-    if isinstance(user_data, str): # Eski kayıt tipi
+    
+    # Eski/Yeni kayıt kontrolü
+    if isinstance(user_data, str): 
         if user_data == sifre:
             token = str(uuid.uuid4())
             users[kadi] = {"sifre": sifre, "token": token}
             json_yaz(USERS_DOSYASI, users)
             return True, token
         return False, None
-    elif isinstance(user_data, dict): # Yeni kayıt tipi
+    elif isinstance(user_data, dict):
         if user_data.get("sifre") == sifre: return True, user_data.get("token")
     return False, None
 
@@ -224,11 +223,14 @@ def mac_sonu_hesapla_pvp(isim, avatar_rol, hedef_set, sonuc):
     json_yaz(SKOR_DOSYASI, veriler)
     return puan
 
-# --- STATE BAŞLATMA ---
+# --- OTO-LOGIN KONTROLÜ (COOKIE) ---
+# Sayfa her yüklendiğinde burası çalışır
+time.sleep(0.1) # Çerezin yüklenmesi için mini bekleme
+cookie_token = cookie_manager.get(cookie="tkm_auth_token")
+
 if 'sayfa' not in st.session_state:
-    token = st.query_params.get("auth")
-    if token:
-        user = token_ile_giris(token)
+    if cookie_token:
+        user = token_ile_giris(cookie_token)
         if user:
             st.session_state.logged_in = True
             st.session_state.isim = user
@@ -239,7 +241,8 @@ if 'sayfa' not in st.session_state:
                 st.session_state.sayfa = 'ana_menu'
             else: st.session_state.sayfa = 'avatar_sec'
         else: st.session_state.sayfa = 'login'
-    else: st.session_state.sayfa = 'login'
+    else:
+        st.session_state.sayfa = 'login'
 
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 if 'isim' not in st.session_state: st.session_state.isim = ""
@@ -259,13 +262,19 @@ def login_sayfasi():
     with tab1:
         l_user = st.text_input("Kullanıcı Adı", key="l_user")
         l_pass = st.text_input("Şifre", type="password", key="l_pass")
-        beni_hatirla = st.checkbox("Beni Hatırla")
+        beni_hatirla = st.checkbox("Beni Hatırla (Tarayıcı Çerezi)")
+        
         if st.button("GİRİŞ YAP", use_container_width=True):
             basari, token = kullanici_giris(l_user, l_pass)
             if basari:
                 st.session_state.logged_in = True
                 st.session_state.isim = l_user
-                st.session_state.show_patch_notes = True # Giriş yapınca notları göster
+                st.session_state.show_patch_notes = True
+                
+                # BENİ HATIRLA (COOKIE YAZMA)
+                if beni_hatirla:
+                    cookie_manager.set("tkm_auth_token", token, expires_at=None)
+                
                 veriler = json_oku(SKOR_DOSYASI)
                 if l_user in veriler and "avatar_rol" in veriler[l_user]:
                     rol = veriler[l_user]["avatar_rol"]
@@ -273,9 +282,9 @@ def login_sayfasi():
                     st.session_state.avatar_ikon = AVATARLAR.get(rol, "👤")
                     st.session_state.sayfa = 'ana_menu'
                 else: st.session_state.sayfa = 'avatar_sec'
-                if beni_hatirla: st.query_params["auth"] = token
                 st.rerun()
             else: st.error("Hatalı bilgi!")
+            
     with tab2:
         r_user = st.text_input("Kullanıcı Adı Belirle", key="r_user")
         r_pass = st.text_input("Şifre Belirle", type="password", key="r_pass")
@@ -308,27 +317,30 @@ def avatar_secim_sayfasi():
                 st.rerun()
 
 def ana_menu():
-    # --- POP-UP ---
+    # --- POP-UP (GÜNCELLENMİŞ TASARIM & KAPAT BUTONU) ---
     if st.session_state.show_patch_notes:
         st.markdown("""
         <div class="modal-overlay">
             <div class="modal-content">
                 <div class="modal-header">
-                    <span>📢 GÜNCELLEME NOTLARI v18.1</span>
+                    <span>📢 GÜNCELLEME NOTLARI v19</span>
                 </div>
                 <div class="modal-body">
-                    <div class="patch-item">🔐 <b>Beni Hatırla Düzeltildi:</b> Artık giriş yapınca URL değişir, o linki kaydedersen şifre sormaz.</div>
-                    <div class="patch-item">⚖️ <b>PvP Kupaları:</b> Bo3(+3/-3), Bo5(+5/-2), Bo7(+7/-1) olarak ayarlandı.</div>
-                    <div class="patch-item">📱 <b>Pop-up Tasarımı:</b> Notlar artık şık bir pencerede açılıyor.</div>
-                    <div class="patch-item">⚡ <b>Performans:</b> Kod optimize edildi.</div>
+                    <div class="patch-item">🍪 <b>Beni Hatırla:</b> Artık link kaydetmene gerek yok! Tarayıcın seni otomatik tanır.</div>
+                    <div class="patch-item">❌ <b>Pop-up Düzeltmesi:</b> Pencereyi kapatmak için aşağıya buton eklendi.</div>
+                    <div class="patch-item">⚖️ <b>PvP Kupa:</b> Bo3(+3/-3), Bo5(+5/-2), Bo7(+7/-1)</div>
+                    <div class="patch-item">🛡️ <b>Güvenlik:</b> Admin paneli gizlendi.</div>
                 </div>
             </div>
         </div>
         """, unsafe_allow_html=True)
         
-        col_x1, col_x2 = st.columns([6, 1])
-        with col_x2:
-            if st.button("KAPAT", type="primary", key="close_modal_btn"):
+        # Kapat butonu için boşluk bırakıp butonu koyuyoruz
+        # Butonu CSS ile modalın içine koymak Streamlit'te zordur, o yüzden altına koyuyoruz ama overlay olduğu için üstte görünür gibi olacak.
+        # Veya en garantisi modalın altına buton koymak.
+        c1, c2, c3 = st.columns([1, 2, 1])
+        with c2:
+            if st.button("❌ NOTLARI KAPAT VE OYUNA GİR", type="primary", use_container_width=True):
                 st.session_state.show_patch_notes = False
                 st.rerun()
 
@@ -343,8 +355,10 @@ def ana_menu():
         st.markdown("### 👥 Çok Oyunculu")
         if st.button("KARŞILIKLI SAVAŞ (ONLINE)", use_container_width=True): st.session_state.sayfa = 'pvp_giris'; st.rerun()
     st.write("---")
-    if st.button("🔒 Çıkış Yap", use_container_width=True):
-        st.session_state.logged_in = False; st.session_state.isim = ""; st.query_params.clear()
+    if st.button("🔒 Çıkış Yap (Hesaptan Çık)", use_container_width=True):
+        st.session_state.logged_in = False; st.session_state.isim = ""; 
+        # Çerezi sil
+        cookie_manager.delete("tkm_auth_token")
         st.session_state.sayfa = 'login'; st.rerun()
 
 # --- AI MODU ---
@@ -573,7 +587,7 @@ def pvp_oyun():
             mac_sonu_hesapla_pvp(st.session_state.isim, st.session_state.avatar_rol, oda['set_turu'], "kazandi")
             maclar[kod][f"{ben}_odul_alindi"] = True
             json_yaz(MAC_DOSYASI, maclar); st.rerun()
-        elif kazanan != ben and not oda.get(f"{ben}_odul_alindi"): # Kaybeden için puan düşme
+        elif kazanan != ben and not oda.get(f"{ben}_odul_alindi"): # Kaybeden
             mac_sonu_hesapla_pvp(st.session_state.isim, st.session_state.avatar_rol, oda['set_turu'], "kaybetti")
             maclar[kod][f"{ben}_odul_alindi"] = True
             json_yaz(MAC_DOSYASI, maclar); st.rerun()
@@ -647,7 +661,7 @@ def pvp_oyun():
         maclar[kod][f"{ben}_durum"]="cikti"; json_yaz(MAC_DOSYASI, maclar)
         st.session_state.sayfa='pvp_giris'; st.rerun()
 
-# --- LİDERLİK (DÜZELTİLDİ 2) ---
+# --- LİDERLİK ---
 def liderlik_sayfasi(mod):
     baslik = "🤖 YAPAY ZEKA" if mod == 'ai' else "👥 PVP"
     st.title(f"🏆 {baslik} LİDERLİK TABLOSU")
@@ -667,7 +681,6 @@ def liderlik_sayfasi(mod):
             l.append({"Avatar": ikon, "Oyuncu": isim, "🏆 Kupa": d["pvp"].get("toplam_kupa", 0)})
     
     if l:
-        # pd artık tanınıyor
         df = pd.DataFrame(l).sort_values(by="🏆 Kupa", ascending=False)
         df.index = range(1, len(df) + 1)
         st.table(df)
