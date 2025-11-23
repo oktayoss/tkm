@@ -23,6 +23,22 @@ st.markdown("""
     .kalkan-aktif { color: #2ecc71; font-weight: bold; font-size: 18px; }
     .kalkan-kirik { color: #e74c3c; font-weight: bold; text-decoration: line-through; font-size: 18px; }
     .teklif-box { background-color: #3498db; color: white; padding: 15px; border-radius: 10px; animation: pulse 2s infinite; margin-bottom: 10px; }
+    
+    /* Güncelleme Notları Stili */
+    .patch-note-overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.8); z-index: 999;
+        display: flex; justify-content: center; align-items: center;
+    }
+    .patch-note-box {
+        background-color: #2d3436; color: #dfe6e9; padding: 25px;
+        border-radius: 15px; border-left: 5px solid #0984e3;
+        width: 80%; max-width: 600px; margin: 100px auto;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    }
+    .patch-title { font-size: 22px; font-weight: bold; color: #74b9ff; margin-bottom: 15px; border-bottom: 1px solid #636e72; padding-bottom: 10px; }
+    .patch-item { font-size: 16px; margin-bottom: 8px; }
+    
     @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
 </style>
 """, unsafe_allow_html=True)
@@ -178,7 +194,7 @@ def mac_sonu_hesapla_ai(isim, avatar_rol, zorluk, hedef, sonuc):
     json_yaz(SKOR_DOSYASI, veriler)
     return puan, streak_mesaj
 
-# --- PUANLAMA (PVP) - GÜNCELLENDİ ---
+# --- PUANLAMA (PVP) ---
 def mac_sonu_hesapla_pvp(isim, avatar_rol, hedef_set, sonuc):
     veriler = json_oku(SKOR_DOSYASI)
     if isim not in veriler: veriler[isim] = {}
@@ -200,22 +216,6 @@ def mac_sonu_hesapla_pvp(isim, avatar_rol, hedef_set, sonuc):
     veriler[isim]["pvp"]["toplam_kupa"] += puan
     json_yaz(SKOR_DOSYASI, veriler)
     return puan
-
-# --- POP-UP (GÜNCELLEME NOTLARI) ---
-@st.experimental_dialog("📢 GÜNCELLEME NOTLARI SÜRÜM v17")
-def show_patch_notes_modal():
-    st.markdown("""
-    - 🏆 **Yeni PvP Kupa Sistemi:**
-        - **Bo3:** Kazan +3 / Kaybet -3
-        - **Bo5:** Kazan +5 / Kaybet -2
-        - **Bo7:** Kazan +7 / Kaybet -1
-    - 📋 **Yenilik:** Güncelleme notları artık Pop-up penceresinde açılıyor.
-    - 🐞 **Düzeltme:** Karşılıklı modda kupa düşmeme sorunu giderildi.
-    - 🎨 **Tasarım:** Arayüz iyileştirmeleri yapıldı.
-    """)
-    if st.button("Anladım & Kapat"):
-        st.session_state.show_patch_notes = False
-        st.rerun()
 
 # --- STATE BAŞLATMA ---
 if 'sayfa' not in st.session_state:
@@ -301,9 +301,22 @@ def avatar_secim_sayfasi():
                 st.rerun()
 
 def ana_menu():
-    # POP-UP KONTROLÜ
+    # GÜNCELLEME NOTLARI (CSS Pop-up)
     if st.session_state.show_patch_notes:
-        show_patch_notes_modal()
+        st.markdown("""
+        <div class="patch-note-box">
+            <div class="patch-title">📢 GÜNCELLEME NOTLARI SÜRÜM v17</div>
+            <div class="patch-item">🏆 <b>Yeni PvP Kupa Sistemi:</b> Bo3(+3/-3), Bo5(+5/-2), Bo7(+7/-1)</div>
+            <div class="patch-item">📢 <b>Yenilik:</b> Güncelleme notları artık Pop-up olarak açılıyor.</div>
+            <div class="patch-item">🐞 <b>Düzeltme:</b> Karşılıklı modda kupa düşmeme sorunu giderildi.</div>
+            <div class="patch-item">🛡️ <b>Stabilite:</b> "AttributeError" hatası düzeltildi.</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if st.button("❌ Kapat", key="close_patch"):
+            st.session_state.show_patch_notes = False
+            st.rerun()
+        st.write("---")
 
     st.markdown(f"<h1 style='text-align: center;'>🗿 📜 ✂️ TAŞ-KAĞIT-MAKAS ARENA</h1>", unsafe_allow_html=True)
     st.markdown(f"<h3 style='text-align: center;'>{st.session_state.avatar_ikon} {st.session_state.isim} ({st.session_state.avatar_rol})</h3>", unsafe_allow_html=True)
@@ -471,7 +484,7 @@ def pvp_giris():
                 "p1_hamle": None, "p2_hamle": None,
                 "p1_durum": "oynuyor", "p2_durum": "bekliyor", 
                 "son_mesaj": "Rakip bekleniyor...", "p1_tank": True, "p2_tank": True,
-                "p1_islem_yapildi": False, "p2_islem_yapildi": False
+                "p1_odul_alindi": False, "p2_odul_alindi": False
             }
             json_yaz(MAC_DOSYASI, maclar)
             st.session_state.oda_kodu = kod; st.session_state.oyuncu_no = "p1"; st.session_state.pvp_hedef_set = hs
@@ -542,15 +555,14 @@ def pvp_oyun():
     elif oda.get('p2_puan') >= oda.get('hedef'): kazanan = "p2"
 
     if kazanan:
-        # --- OTOMATİK PUAN İŞLEME (KAZANAN VE KAYBEDEN İÇİN) ---
-        if not oda.get(f"{ben}_islem_yapildi"):
-            sonuc = "kazandi" if kazanan == ben else "kaybetti"
-            # Puan Ver/Düş
-            mac_sonu_hesapla_pvp(st.session_state.isim, st.session_state.avatar_rol, oda['set_turu'], sonuc)
-            # Flag İşle
-            maclar[kod][f"{ben}_islem_yapildi"] = True
-            json_yaz(MAC_DOSYASI, maclar)
-            st.rerun()
+        if kazanan == ben and not oda.get(f"{ben}_odul_alindi"):
+            mac_sonu_hesapla_pvp(st.session_state.isim, st.session_state.avatar_rol, oda['set_turu'], "kazandi")
+            maclar[kod][f"{ben}_odul_alindi"] = True
+            json_yaz(MAC_DOSYASI, maclar); st.rerun()
+        elif kazanan != ben and not oda.get(f"{ben}_odul_alindi"): # Kaybeden için puan düşme
+            mac_sonu_hesapla_pvp(st.session_state.isim, st.session_state.avatar_rol, oda['set_turu'], "kaybetti")
+            maclar[kod][f"{ben}_odul_alindi"] = True
+            json_yaz(MAC_DOSYASI, maclar); st.rerun()
 
         durum = "kazandi" if kazanan == ben else "kaybetti"
         renk = "kazandi-box" if durum == "kazandi" else "kaybetti-box"
@@ -563,10 +575,11 @@ def pvp_oyun():
             c1, c2 = st.columns(2)
             with c1:
                 if st.button("KABUL ET"):
+                    if kazanan == ben: mac_sonu_hesapla_pvp(st.session_state.isim, st.session_state.avatar_rol, oda['set_turu'], "kazandi")
                     maclar[kod]["p1_puan"]=0; maclar[kod]["p2_puan"]=0; maclar[kod]["p1_hamle"]=None; maclar[kod]["p2_hamle"]=None
                     maclar[kod]["p1_durum"]="oynuyor"; maclar[kod]["p2_durum"]="oynuyor"; maclar[kod]["p1_tank"]=True; maclar[kod]["p2_tank"]=True
                     maclar[kod]["son_mesaj"]="Rövanş Başladı!"; maclar[kod].pop("son_p1_goster", None)
-                    maclar[kod]["p1_islem_yapildi"]=False; maclar[kod]["p2_islem_yapildi"]=False
+                    maclar[kod]["p1_odul_alindi"]=False; maclar[kod]["p2_odul_alindi"]=False
                     json_yaz(MAC_DOSYASI, maclar); st.rerun()
             with c2:
                 if st.button("REDDET"):
@@ -620,7 +633,7 @@ def pvp_oyun():
         maclar[kod][f"{ben}_durum"]="cikti"; json_yaz(MAC_DOSYASI, maclar)
         st.session_state.sayfa='pvp_giris'; st.rerun()
 
-# --- LİDERLİK ---
+# --- LİDERLİK (DÜZELTİLDİ 2) ---
 def liderlik_sayfasi(mod):
     baslik = "🤖 YAPAY ZEKA" if mod == 'ai' else "👥 PVP"
     st.title(f"🏆 {baslik} LİDERLİK TABLOSU")
@@ -640,6 +653,7 @@ def liderlik_sayfasi(mod):
             l.append({"Avatar": ikon, "Oyuncu": isim, "🏆 Kupa": d["pvp"].get("toplam_kupa", 0)})
     
     if l:
+        # pd artık tanınıyor
         df = pd.DataFrame(l).sort_values(by="🏆 Kupa", ascending=False)
         df.index = range(1, len(df) + 1)
         st.table(df)
