@@ -52,14 +52,19 @@ SOZLER = {
 SKOR_DOSYASI = "skorlar_v2.json"
 MAC_DOSYASI = "maclar.json"
 
-# --- FONKSİYONLAR ---
+# --- FONKSİYONLAR (Düzeltilen Kısım) ---
 def json_oku(dosya):
-    if not os.path.exists(dosya): return {}
-    try: with open(dosya, "r", encoding="utf-8") as f: return json.load(f)
-    except: return {}
+    if not os.path.exists(dosya):
+        return {}
+    try:
+        with open(dosya, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except:
+        return {}
 
 def json_yaz(dosya, veri):
-    with open(dosya, "w", encoding="utf-8") as f: json.dump(veri, f, ensure_ascii=False, indent=4)
+    with open(dosya, "w", encoding="utf-8") as f:
+        json.dump(veri, f, ensure_ascii=False, indent=4)
 
 def resim_goster(hamle, genislik=130):
     dosya = f"{hamle.lower()}.png"
@@ -71,6 +76,9 @@ def resim_goster(hamle, genislik=130):
 def get_player_data(isim):
     veriler = json_oku(SKOR_DOSYASI)
     return veriler.get(isim)
+
+def rastgele_soz(durum):
+    return random.choice(SOZLER.get(durum, [""]))
 
 # --- PUANLAMA (AI) ---
 def mac_sonu_hesapla_ai(isim, avatar_rol, zorluk, hedef, sonuc):
@@ -93,11 +101,9 @@ def mac_sonu_hesapla_ai(isim, avatar_rol, zorluk, hedef, sonuc):
         streak_mesaj = f"🔥 Seri: {streak}"
         if streak > 3: puan += 1; streak_mesaj += " (+1 Bonus)"
         
-        # Büyücü Korumasını Resetle (Gerekirse)
         veriler[isim][f"{streak_key}_protected"] = False
 
     elif sonuc == "kaybetti":
-        # Büyücü Kontrolü
         buyucu_korudu = False
         if avatar_rol == "Büyücü" and streak > 0:
             prot_key = f"{streak_key}_protected"
@@ -113,7 +119,6 @@ def mac_sonu_hesapla_ai(isim, avatar_rol, zorluk, hedef, sonuc):
         ceza_map = {"Kolay": {3: -6, 5: -3, 7: -1}, "Orta": {3: -3, 5: -2, 7: -1}, "Zor": {3: -1, 5: -1, 7: -1}}
         puan = ceza_map.get(zorluk, {}).get(hedef, -1)
         
-        # Savaşçı Kontrolü
         if avatar_rol == "Savaşçı":
             shields = player_ai.get("warrior_shields", {"Kolay": True, "Orta": True, "Zor": True})
             if shields.get(zorluk, True):
@@ -147,7 +152,6 @@ if 'isim' not in st.session_state: st.session_state.isim = ""
 if 'avatar_rol' not in st.session_state: st.session_state.avatar_rol = None
 if 'avatar_ikon' not in st.session_state: st.session_state.avatar_ikon = None
 
-# AI Değişkenleri
 if 'ai_state' not in st.session_state:
     st.session_state.ai_state = {
         'p_skor': 0, 'pc_skor': 0, 'mesaj': "", 'soz': "", 'bitti': False, 
@@ -155,7 +159,6 @@ if 'ai_state' not in st.session_state:
         'pc_rol': "Savaşçı", 'pc_ikon': "⚔️"
     }
 
-# PVP Değişkenleri
 if 'oda_kodu' not in st.session_state: st.session_state.oda_kodu = None
 
 # --- SAYFALAR ---
@@ -205,15 +208,12 @@ def ai_giris():
 
     if st.button("⚔️ BAŞLA", use_container_width=True):
         st.session_state.ai_zorluk = zorluk; st.session_state.ai_hedef = hedef
-        # AI Rastgele Rol Seçimi
         pc_rol = random.choice(list(AVATARLAR.keys()))
         pc_ikon = AVATARLAR[pc_rol]
-        
         st.session_state.ai_state = {
             'p_skor': 0, 'pc_skor': 0, 'mesaj': "Hamleni Bekliyorum...", 'soz': "", 'bitti': False, 
             'okcu_hak': False, 'pc_okcu_hak': False, 'tank_hak': True, 'pc_tank_hak': True,
-            'pc_rol': pc_rol, 'pc_ikon': pc_ikon,
-            'p_hamle': None, 'pc_hamle': None
+            'pc_rol': pc_rol, 'pc_ikon': pc_ikon, 'p_hamle': None, 'pc_hamle': None
         }
         st.session_state.sayfa = 'ai_oyun'; st.rerun()
         
@@ -222,7 +222,6 @@ def ai_giris():
 
 def ai_oyun():
     s = st.session_state.ai_state
-    
     c1, c2, c3 = st.columns([3, 1, 3])
     with c1: st.markdown(f"<div class='skor-kutu'><h3>{st.session_state.avatar_ikon}</h3><h1>{s['p_skor']}</h1></div>", unsafe_allow_html=True)
     with c2: st.markdown("<div class='vs-text'>VS</div>", unsafe_allow_html=True)
@@ -234,8 +233,19 @@ def ai_oyun():
         renk = "kazandi-box" if "KAZANDIN" in baslik else "kaybetti-box"
         st.markdown(f"<div class='{renk}'><h1>{baslik}</h1><p class='savas-sozu'>{s['soz']}</p></div>", unsafe_allow_html=True)
         st.markdown(s.get('sonuc_html', ''), unsafe_allow_html=True)
-        
-        if st.button("🏠 ANA MENÜ", use_container_width=True): st.session_state.sayfa = 'ana_menu'; st.rerun()
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("🔄 AYNI AYARLARLA TEKRAR", use_container_width=True):
+                # Reset mantığı
+                st.session_state.ai_state['p_skor'] = 0
+                st.session_state.ai_state['pc_skor'] = 0
+                st.session_state.ai_state['bitti'] = False
+                st.session_state.ai_state['mesaj'] = "Yeni maç başladı!"
+                st.session_state.ai_state['okcu_hak'] = False
+                st.session_state.ai_state['tank_hak'] = True
+                st.rerun()
+        with c2:
+            if st.button("🏠 ANA MENÜ", use_container_width=True): st.session_state.sayfa = 'ana_menu'; st.rerun()
         return
 
     bilgi = st.empty()
@@ -248,11 +258,11 @@ def ai_oyun():
     st.write("---")
     c1, c2, c3 = st.columns(3)
     with c1: 
-        if st.button("🗿 TAŞ"): ai_hamle_yap("Taş", bilgi)
+        if st.button("🗿 TAŞ", use_container_width=True): ai_hamle_yap("Taş", bilgi)
     with c2: 
-        if st.button("📜 KAĞIT"): ai_hamle_yap("Kağıt", bilgi)
+        if st.button("📜 KAĞIT", use_container_width=True): ai_hamle_yap("Kağıt", bilgi)
     with c3: 
-        if st.button("✂️ MAKAS"): ai_hamle_yap("Makas", bilgi)
+        if st.button("✂️ MAKAS", use_container_width=True): ai_hamle_yap("Makas", bilgi)
     st.write("")
     if st.button("🏳️ Çık"): st.session_state.sayfa='ana_menu'; st.rerun()
 
@@ -264,49 +274,42 @@ def ai_hamle_yap(p_hamle, bilgi_placeholder):
     
     kazanan = {"Taş": "Makas", "Kağıt": "Taş", "Makas": "Kağıt"}
     pc_hamle = random.choice(["Taş", "Kağıt", "Makas"])
-    
-    # AI Zorluk Mantığı
     z = st.session_state.ai_zorluk
-    if z == "Kolay" and random.randint(1,100) <= 40: pc_hamle = {"Taş":"Makas", "Kağıt":"Taş", "Makas":"Kağıt"}[p_hamle] # Kaybet
-    elif z == "Zor" and random.randint(1,100) <= 40: pc_hamle = {"Taş":"Kağıt", "Kağıt":"Makas", "Makas":"Taş"}[p_hamle] # Kazan
+    if z == "Kolay" and random.randint(1,100) <= 40: pc_hamle = {"Taş":"Makas", "Kağıt":"Taş", "Makas":"Kağıt"}[p_hamle]
+    elif z == "Zor" and random.randint(1,100) <= 40: pc_hamle = {"Taş":"Kağıt", "Kağıt":"Makas", "Makas":"Taş"}[p_hamle]
     
     s['pc_hamle'] = pc_hamle
-    
     tur_sonuc = ""
-    # Sonuç Hesapla
+    
     if p_hamle == pc_hamle:
-        # OKÇU YETENEĞİ
         if st.session_state.avatar_rol == "Okçu" and not s['okcu_hak']:
-            s['p_skor']+=1; s['okcu_hak']=True; tur_sonuc="kazandi"; s['mesaj']="🏹 OKÇU YETENEĞİ: Beraberliği bozdun!"
+            s['p_skor']+=1; s['okcu_hak']=True; tur_sonuc="kazandi"; s['mesaj']="🏹 OKÇU YETENEĞİ: Kazandın!"
         elif s['pc_rol'] == "Okçu" and not s['pc_okcu_hak']:
-            s['pc_skor']+=1; s['pc_okcu_hak']=True; tur_sonuc="kaybetti"; s['mesaj']="🏹 RAKİP OKÇU: Beraberliği bozdu!"
+            s['pc_skor']+=1; s['pc_okcu_hak']=True; tur_sonuc="kaybetti"; s['mesaj']="🏹 RAKİP OKÇU: Kazandı!"
         else:
             tur_sonuc="berabere"; s['mesaj']="🤝 BERABERE!"
     elif kazanan[p_hamle] == pc_hamle:
-        # TANK YETENEĞİ (Oyuncu)
         puan = 1
         if st.session_state.avatar_rol == "Tank" and s['tank_hak']:
             puan = 2; s['tank_hak'] = False; s['mesaj'] = "🚜 TANK GÜCÜ: +2 Puan!"
         else: s['mesaj'] = "✅ KAZANDIN!"
         s['p_skor']+=puan; tur_sonuc="kazandi"
     else:
-        # TANK YETENEĞİ (AI)
         puan = 1
         if s['pc_rol'] == "Tank" and s['pc_tank_hak']:
             puan = 2; s['pc_tank_hak'] = False; s['mesaj'] = "🚜 RAKİP TANK EZDİ: +2 Puan!"
         else: s['mesaj'] = "❌ KAYBETTİN!"
         s['pc_skor']+=puan; tur_sonuc="kaybetti"
     
-    s['soz'] = random.choice(SOZLER.get(tur_sonuc, [""]))
+    s['soz'] = rastgele_soz(tur_sonuc)
     
-    # Bitiş
     h = st.session_state.ai_hedef
     if s['p_skor'] >= h:
         p, m = mac_sonu_hesapla_ai(st.session_state.isim, st.session_state.avatar_rol, z, h, "kazandi")
-        s['sonuc_html'] = f"<h3>+{p} Kupa</h3><p>{m}</p>"; s['bitti'] = True
+        s['sonuc_html'] = f"<h3>+{p} Kupa Kazandın</h3><p>{m}</p>"; s['bitti'] = True
     elif s['pc_skor'] >= h:
         p, m = mac_sonu_hesapla_ai(st.session_state.isim, st.session_state.avatar_rol, z, h, "kaybetti")
-        s['sonuc_html'] = f"<h3>{p} Kupa</h3><p>{m}</p>"; s['bitti'] = True
+        s['sonuc_html'] = f"<h3>{p} Kupa Kaybettin</h3><p>{m}</p>"; s['bitti'] = True
     st.rerun()
 
 # --- PVP MODU ---
@@ -328,11 +331,11 @@ def pvp_giris():
                 "p2": None, "p2_avatar": None, "p2_rol": None,
                 "p1_puan": 0, "p2_puan": 0, "hedef": h_skor, "set_turu": hs,
                 "p1_hamle": None, "p2_hamle": None,
-                "p1_durum": "oynuyor", "p2_durum": "bekliyor", # oynuyor, bekliyor, rovan_istiyor, cikti
-                "son_mesaj": "Rakip Bekleniyor...", "p1_tank": True, "p2_tank": True
+                "p1_durum": "oynuyor", "p2_durum": "bekliyor", 
+                "son_mesaj": "Rakip bekleniyor...", "p1_tank": True, "p2_tank": True
             }
             json_yaz(MAC_DOSYASI, maclar)
-            st.session_state.oda_kodu = kod; st.session_state.oyuncu_no = "p1"
+            st.session_state.oda_kodu = kod; st.session_state.oyuncu_no = "p1"; st.session_state.pvp_hedef_set = hs
             st.session_state.sayfa = 'pvp_lobi'; st.rerun()
     with tab2:
         gk = st.text_input("Oda Kodu:"); 
@@ -366,24 +369,21 @@ def pvp_lobi():
     if st.button("Çık"): st.session_state.sayfa='ana_menu'; st.rerun()
 
 def pvp_oyun():
-    kod = st.session_state.oda_kodu; ben = st.session_state.oyuncu_no
+    kod=st.session_state.oda_kodu; ben=st.session_state.oyuncu_no
     rakip = "p2" if ben == "p1" else "p1"
     maclar = json_oku(MAC_DOSYASI); oda = maclar.get(kod)
     
     if not oda: st.session_state.sayfa='ana_menu'; st.rerun(); return
     
-    # Durum Kontrolü (Rakip çıktı mı?)
     if oda[f"{rakip}_durum"] == "cikti":
-        st.error("Rakip masadan kalktı (Ana Menüye döndü)."); 
-        if st.button("Ana Menüye Dön"): st.session_state.sayfa='ana_menu'; st.rerun()
+        st.error("Rakip masadan kalktı."); 
+        if st.button("Ana Menü"): st.session_state.sayfa='ana_menu'; st.rerun()
         return
 
-    # Oto Yenileme
     if (oda[f"{ben}_hamle"] and not oda[f"{rakip}_hamle"]) or \
        (oda[f"{rakip}_durum"] == "rovan_istiyor" and oda[f"{ben}_durum"] != "rovan_istiyor"):
         time.sleep(2); st.rerun()
 
-    # Skorlar
     c1,c2,c3 = st.columns([3,1,3])
     with c1: st.markdown(f"<div class='skor-kutu'><h3>{oda['p1_avatar']} {oda['p1']}</h3><h1>{oda['p1_puan']}</h1></div>", unsafe_allow_html=True)
     with c2: st.markdown("<div class='vs-text'>VS</div>", unsafe_allow_html=True)
@@ -397,7 +397,6 @@ def pvp_oyun():
         with ic1: st.caption(f"{oda['p1']}"); resim_goster(oda['son_p1_goster'], 80)
         with ic2: st.caption(f"{oda['p2']}"); resim_goster(oda['son_p2_goster'], 80)
 
-    # --- OYUN BİTTİ Mİ? ---
     kazanan = None
     if oda['p1_puan'] >= oda['hedef']: kazanan = "p1"
     elif oda['p2_puan'] >= oda['hedef']: kazanan = "p2"
@@ -406,20 +405,15 @@ def pvp_oyun():
         durum = "kazandi" if kazanan == ben else "kaybetti"
         renk = "kazandi-box" if durum == "kazandi" else "kaybetti-box"
         baslik = "✅ KAZANDIN!" if durum == "kazandi" else "❌ KAYBETTİN..."
+        st.markdown(f"<div class='{renk}'><h1>{baslik}</h1><p class='savas-sozu'>{rastgele_soz(durum)}</p></div>", unsafe_allow_html=True)
         
-        st.markdown(f"<div class='{renk}'><h1>{baslik}</h1></div>", unsafe_allow_html=True)
-        
-        # Rövanş Mantığı
         st.write("---")
         if oda[f"{rakip}_durum"] == "rovan_istiyor":
-            st.info(f"🔄 {oda[rakip]} Rövanş İstiyor!")
+            st.markdown("<div class='teklif-box'>🔄 RAKİP RÖVANŞ İSTİYOR!</div>", unsafe_allow_html=True)
             c1, c2 = st.columns(2)
             with c1:
-                if st.button("KABUL ET (Rövanş)"):
-                    # Puanı Kaydet (Sadece kazanan için)
-                    if kazanan == ben:
-                        p = mac_sonu_hesapla_pvp(st.session_state.isim, st.session_state.avatar_rol, oda['set_turu'], "kazandi")
-                    # Odayı Sıfırla
+                if st.button("KABUL ET"):
+                    if kazanan == ben: mac_sonu_hesapla_pvp(st.session_state.isim, st.session_state.avatar_rol, oda['set_turu'], "kazandi")
                     maclar[kod]["p1_puan"]=0; maclar[kod]["p2_puan"]=0
                     maclar[kod]["p1_hamle"]=None; maclar[kod]["p2_hamle"]=None
                     maclar[kod]["p1_durum"]="oynuyor"; maclar[kod]["p2_durum"]="oynuyor"
@@ -428,9 +422,8 @@ def pvp_oyun():
                     json_yaz(MAC_DOSYASI, maclar)
                     st.rerun()
             with c2:
-                if st.button("REDDET (Çık)"):
-                    maclar[kod][f"{ben}_durum"] = "cikti"
-                    json_yaz(MAC_DOSYASI, maclar)
+                if st.button("REDDET"):
+                    maclar[kod][f"{ben}_durum"] = "cikti"; json_yaz(MAC_DOSYASI, maclar)
                     st.session_state.sayfa='ana_menu'; st.rerun()
         elif oda[f"{ben}_durum"] == "rovan_istiyor":
             st.warning("Rakip Bekleniyor...")
@@ -438,45 +431,18 @@ def pvp_oyun():
             c1, c2 = st.columns(2)
             with c1:
                 if st.button("🔄 RÖVANŞ TEKLİF ET"):
-                    if kazanan == ben: # Puanı hemen kaydet (ilk basışta)
-                         mac_sonu_hesapla_pvp(st.session_state.isim, st.session_state.avatar_rol, oda['set_turu'], "kazandi")
-                    
-                    maclar[kod][f"{ben}_durum"] = "rovan_istiyor"
-                    json_yaz(MAC_DOSYASI, maclar)
+                    if kazanan == ben: mac_sonu_hesapla_pvp(st.session_state.isim, st.session_state.avatar_rol, oda['set_turu'], "kazandi")
+                    maclar[kod][f"{ben}_durum"] = "rovan_istiyor"; json_yaz(MAC_DOSYASI, maclar)
                     st.rerun()
             with c2:
                 if st.button("🏠 Ana Menü"):
-                    maclar[kod][f"{ben}_durum"] = "cikti"
-                    json_yaz(MAC_DOSYASI, maclar)
+                    maclar[kod][f"{ben}_durum"] = "cikti"; json_yaz(MAC_DOSYASI, maclar)
                     st.session_state.sayfa='ana_menu'; st.rerun()
         return
 
-    # --- OYUN DEVAM EDİYOR ---
+    st.write("---")
     if oda[f"{ben}_hamle"]: 
         st.warning("Hamle yapıldı, rakip bekleniyor...")
-        if oda["p1_hamle"] and oda["p2_hamle"]: # İkisi de yapmış
-            # Sonuç Hesapla
-            p1h, p2h = oda["p1_hamle"], oda["p2_hamle"]
-            kazanan = "berabere"
-            if (p1h=="Taş" and p2h=="Makas") or (p1h=="Kağıt" and p2h=="Taş") or (p1h=="Makas" and p2h=="Kağıt"): kazanan="p1"
-            elif p1h!=p2h: kazanan="p2"
-            
-            # Tank Bonusu Kontrol (PVP)
-            puan = 1
-            if kazanan == "p1":
-                if oda["p1_rol"] == "Tank" and oda["p1_tank"]: puan=2; oda["p1_tank"]=False; oda["son_mesaj"]=f"{oda['p1']} TANK GÜCÜYLE EZDİ!"
-                else: oda["son_mesaj"]=f"{oda['p1']} Kazandı!"
-                oda["p1_puan"] += puan
-            elif kazanan == "p2":
-                if oda["p2_rol"] == "Tank" and oda["p2_tank"]: puan=2; oda["p2_tank"]=False; oda["son_mesaj"]=f"{oda['p2']} TANK GÜCÜYLE EZDİ!"
-                else: oda["son_mesaj"]=f"{oda['p2']} Kazandı!"
-                oda["p2_puan"] += puan
-            else: oda["son_mesaj"] = "Berabere!"
-            
-            oda["son_p1_goster"]=p1h; oda["son_p2_goster"]=p2h
-            oda["p1_hamle"]=None; oda["p2_hamle"]=None
-            json_yaz(MAC_DOSYASI, maclar)
-            st.rerun()
     else:
         st.write("Hamleni Seç:")
         b1,b2,b3=st.columns(3)
@@ -484,6 +450,29 @@ def pvp_oyun():
         if b2.button("📜 KAĞIT"): maclar[kod][f"{ben}_hamle"]="Kağıt"; json_yaz(MAC_DOSYASI, maclar); st.rerun()
         if b3.button("✂️ MAKAS"): maclar[kod][f"{ben}_hamle"]="Makas"; json_yaz(MAC_DOSYASI, maclar); st.rerun()
         
+    # Hamle İşleme (Server Side logic imitation)
+    if oda["p1_hamle"] and oda["p2_hamle"]:
+        p1h, p2h = oda["p1_hamle"], oda["p2_hamle"]
+        kazanan = "berabere"
+        if (p1h=="Taş" and p2h=="Makas") or (p1h=="Kağıt" and p2h=="Taş") or (p1h=="Makas" and p2h=="Kağıt"): kazanan="p1"
+        elif p1h!=p2h: kazanan="p2"
+        
+        puan = 1
+        if kazanan == "p1":
+            if oda["p1_rol"] == "Tank" and oda["p1_tank"]: puan=2; oda["p1_tank"]=False; oda["son_mesaj"]=f"{oda['p1']} TANK GÜCÜYLE EZDİ!"
+            else: oda["son_mesaj"]=f"{oda['p1']} Kazandı!"
+            oda["p1_puan"] += puan
+        elif kazanan == "p2":
+            if oda["p2_rol"] == "Tank" and oda["p2_tank"]: puan=2; oda["p2_tank"]=False; oda["son_mesaj"]=f"{oda['p2']} TANK GÜCÜYLE EZDİ!"
+            else: oda["son_mesaj"]=f"{oda['p2']} Kazandı!"
+            oda["p2_puan"] += puan
+        else: oda["son_mesaj"] = "Berabere!"
+        
+        oda["son_p1_goster"]=p1h; oda["son_p2_goster"]=p2h
+        oda["p1_hamle"]=None; oda["p2_hamle"]=None
+        json_yaz(MAC_DOSYASI, maclar)
+        st.rerun()
+
     st.write("---")
     if st.button("Çık"): 
         maclar[kod][f"{ben}_durum"]="cikti"; json_yaz(MAC_DOSYASI, maclar)
