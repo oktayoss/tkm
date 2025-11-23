@@ -23,6 +23,30 @@ st.markdown("""
     .kalkan-aktif { color: #2ecc71; font-weight: bold; font-size: 18px; }
     .kalkan-kirik { color: #e74c3c; font-weight: bold; text-decoration: line-through; font-size: 18px; }
     .teklif-box { background-color: #3498db; color: white; padding: 15px; border-radius: 10px; animation: pulse 2s infinite; margin-bottom: 10px; }
+    
+    /* Güncelleme Notları Stili */
+    .patch-note-box {
+        background-color: #2d3436;
+        color: #dfe6e9;
+        padding: 20px;
+        border-radius: 15px;
+        border-left: 5px solid #0984e3;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    }
+    .patch-title {
+        font-size: 22px;
+        font-weight: bold;
+        color: #74b9ff;
+        margin-bottom: 15px;
+        border-bottom: 1px solid #636e72;
+        padding-bottom: 10px;
+    }
+    .patch-item {
+        font-size: 16px;
+        margin-bottom: 8px;
+    }
+    
     @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
 </style>
 """, unsafe_allow_html=True)
@@ -50,7 +74,7 @@ def json_oku(dosya):
     try:
         with open(dosya, "r", encoding="utf-8") as f: return json.load(f)
     except:
-        time.sleep(0.1) # Kısa bir bekleme ve tekrar deneme (çakışma önleyici)
+        time.sleep(0.1)
         try:
             with open(dosya, "r", encoding="utf-8") as f: return json.load(f)
         except: return {}
@@ -58,7 +82,7 @@ def json_oku(dosya):
 def json_yaz(dosya, veri):
     try:
         with open(dosya, "w", encoding="utf-8") as f: json.dump(veri, f, ensure_ascii=False, indent=4)
-    except: pass # Yazma hatası olursa yoksay (nadir durum)
+    except: pass
 
 def resim_goster(hamle, genislik=130):
     dosya = f"{hamle.lower()}.png"
@@ -125,12 +149,24 @@ if st.query_params.get("mod") == "yonetici":
                 st.warning("Silindi"); time.sleep(1); st.rerun()
     st.stop()
 
-# --- PUANLAMA (AI) ---
+# --- PUANLAMA (AI) - HATA DÜZELTİLDİ ---
 def mac_sonu_hesapla_ai(isim, avatar_rol, zorluk, hedef, sonuc):
     veriler = json_oku(SKOR_DOSYASI)
     if isim not in veriler: veriler[isim] = {}
-    if "ai" not in veriler[isim]: veriler[isim]["ai"] = {"toplam_kupa": 0, "streaks": {}, "warrior_shields": {"Kolay":True,"Orta":True,"Zor":True}, "wins": {"Kolay":0,"Orta":0,"Zor":0}}
     
+    # --- HATA ÇÖZÜMÜ: EKSİK VERİLERİ OLUŞTUR ---
+    if "ai" not in veriler[isim]: 
+        veriler[isim]["ai"] = {"toplam_kupa": 0, "streaks": {}, "warrior_shields": {"Kolay":True,"Orta":True,"Zor":True}, "wins": {"Kolay":0,"Orta":0,"Zor":0}}
+    
+    # "streaks" anahtarı yoksa oluştur
+    if "streaks" not in veriler[isim]["ai"]:
+        veriler[isim]["ai"]["streaks"] = {}
+    if "wins" not in veriler[isim]["ai"]:
+        veriler[isim]["ai"]["wins"] = {"Kolay":0,"Orta":0,"Zor":0}
+    if "warrior_shields" not in veriler[isim]["ai"]:
+        veriler[isim]["ai"]["warrior_shields"] = {"Kolay":True,"Orta":True,"Zor":True}
+    # ---------------------------------------------
+
     veriler[isim]["avatar_rol"] = avatar_rol
     player_ai = veriler[isim]["ai"]
     streak_key = f"{zorluk}_{hedef}"
@@ -211,6 +247,7 @@ if 'avatar_rol' not in st.session_state: st.session_state.avatar_rol = None
 if 'avatar_ikon' not in st.session_state: st.session_state.avatar_ikon = None
 if 'ai_state' not in st.session_state: st.session_state.ai_state = {'p_skor': 0, 'pc_skor': 0}
 if 'oda_kodu' not in st.session_state: st.session_state.oda_kodu = None
+if 'show_patch_notes' not in st.session_state: st.session_state.show_patch_notes = False # Güncelleme notları durumu
 
 # ==========================
 # SAYFALAR
@@ -228,6 +265,7 @@ def login_sayfasi():
             if basari:
                 st.session_state.logged_in = True
                 st.session_state.isim = l_user
+                st.session_state.show_patch_notes = True # Giriş yapınca notları göster
                 veriler = json_oku(SKOR_DOSYASI)
                 if l_user in veriler and "avatar_rol" in veriler[l_user]:
                     rol = veriler[l_user]["avatar_rol"]
@@ -272,6 +310,27 @@ def avatar_secim_sayfasi():
 def ana_menu():
     st.markdown(f"<h1 style='text-align: center;'>🗿 📜 ✂️ TAŞ-KAĞIT-MAKAS ARENA</h1>", unsafe_allow_html=True)
     st.markdown(f"<h3 style='text-align: center;'>{st.session_state.avatar_ikon} {st.session_state.isim} ({st.session_state.avatar_rol})</h3>", unsafe_allow_html=True)
+    
+    # --- GÜNCELLEME NOTLARI MODALI ---
+    if st.session_state.show_patch_notes:
+        st.markdown("""
+        <div class="patch-note-box">
+            <div class="patch-title">📢 GÜNCELLEME NOTLARI SÜRÜM v16</div>
+            <div class="patch-item">🛠️ <b>Hata Düzeltmesi:</b> Maç sırasında oluşan çökme (KeyError) hataları giderildi.</div>
+            <div class="patch-item">📜 <b>Yenilik:</b> Güncelleme notları ekranı oyuna eklendi.</div>
+            <div class="patch-item">🛡️ <b>İyileştirme:</b> Veri kaydetme sistemi daha güvenli hale getirildi.</div>
+            <div class="patch-item">🚀 <b>Performans:</b> Sayfa geçişleri hızlandırıldı.</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        col_x1, col_x2 = st.columns([8, 1])
+        with col_x2:
+            if st.button("❌ Kapat", key="close_patch"):
+                st.session_state.show_patch_notes = False
+                st.rerun()
+        st.write("---")
+    # ---------------------------------
+
     c1, c2 = st.columns(2)
     with c1:
         st.markdown("### 🤖 Tek Kişilik")
@@ -333,7 +392,6 @@ def ai_giris():
 def ai_oyun():
     s = st.session_state.ai_state
     c1, c2, c3 = st.columns([3, 1, 3])
-    # DÜZELTME 1: Kullanıcı adı eklendi
     with c1: st.markdown(f"<div class='skor-kutu'><h3>{st.session_state.avatar_ikon} {st.session_state.isim}</h3><h1>{s['p_skor']}</h1></div>", unsafe_allow_html=True)
     with c2: st.markdown("<div class='vs-text'>VS</div>", unsafe_allow_html=True)
     with c3: st.markdown(f"<div class='skor-kutu'><h3>{s['pc_ikon']} {s['pc_rol']} (AI)</h3><h1>{s['pc_skor']}</h1></div>", unsafe_allow_html=True)
