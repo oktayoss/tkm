@@ -9,11 +9,15 @@ import pandas as pd # Liderlik tablosu için gerekli
 # --- SAYFA AYARLARI ---
 st.set_page_config(page_title="Taş Kağıt Makas Arena", page_icon="🗿", layout="centered")
 
-# --- CSS STİLLERİ ---
+# --- CSS STİLLERİ (GÜÇLENDİRİLMİŞ POP-UP) ---
 st.markdown("""
 <style>
-    .dusunuyor { font-size: 20px; font-weight: bold; color: #e74c3c; text-align: center; animation: blinker 1s linear infinite; }
+    /* Animasyonlar */
     @keyframes blinker { 50% { opacity: 0; } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideIn { from { transform: translateY(-50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    
+    .dusunuyor { font-size: 20px; font-weight: bold; color: #e74c3c; text-align: center; animation: blinker 1s linear infinite; }
     .skor-kutu { background-color: #2c3e50; padding: 10px; border-radius: 10px; text-align: center; border: 2px solid #34495e; color: white; }
     .kazandi-box { background-color: #27ae60; color: white; padding: 20px; border-radius: 15px; text-align: center; box-shadow: 0px 4px 15px rgba(0,0,0,0.2); margin-bottom: 20px;}
     .kaybetti-box { background-color: #c0392b; color: white; padding: 20px; border-radius: 15px; text-align: center; box-shadow: 0px 4px 15px rgba(0,0,0,0.2); margin-bottom: 20px;}
@@ -22,24 +26,45 @@ st.markdown("""
     .kupa-gosterge { background-color: #f1c40f; color: black; padding: 10px; border-radius: 8px; font-weight: bold; text-align: center; margin-bottom: 10px; }
     .kalkan-aktif { color: #2ecc71; font-weight: bold; font-size: 18px; }
     .kalkan-kirik { color: #e74c3c; font-weight: bold; text-decoration: line-through; font-size: 18px; }
-    .teklif-box { background-color: #3498db; color: white; padding: 15px; border-radius: 10px; animation: pulse 2s infinite; margin-bottom: 10px; }
+    .teklif-box { background-color: #3498db; color: white; padding: 15px; border-radius: 10px; animation: blinker 2s infinite; margin-bottom: 10px; }
     
-    /* Güncelleme Notları Stili */
-    .patch-note-overlay {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.8); z-index: 999;
+    /* GÜÇLENDİRİLMİŞ POP-UP (Modal) STİLİ */
+    .modal-overlay {
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background-color: rgba(0, 0, 0, 0.85);
+        z-index: 99999; /* En üstte dursun */
         display: flex; justify-content: center; align-items: center;
+        animation: fadeIn 0.3s ease-in-out;
+        backdrop-filter: blur(5px);
     }
-    .patch-note-box {
-        background-color: #2d3436; color: #dfe6e9; padding: 25px;
-        border-radius: 15px; border-left: 5px solid #0984e3;
-        width: 80%; max-width: 600px; margin: 100px auto;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    .modal-content {
+        background-color: #2d3436;
+        color: #dfe6e9;
+        padding: 30px;
+        border-radius: 15px;
+        width: 90%;
+        max-width: 500px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        border: 1px solid #636e72;
+        position: relative;
+        animation: slideIn 0.4s ease-out;
     }
-    .patch-title { font-size: 22px; font-weight: bold; color: #74b9ff; margin-bottom: 15px; border-bottom: 1px solid #636e72; padding-bottom: 10px; }
-    .patch-item { font-size: 16px; margin-bottom: 8px; }
-    
-    @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
+    .modal-header {
+        font-size: 24px;
+        font-weight: bold;
+        color: #00cec9;
+        margin-bottom: 20px;
+        border-bottom: 2px solid #0984e3;
+        padding-bottom: 10px;
+        display: flex; justify-content: space-between; align-items: center;
+    }
+    .modal-body {
+        font-size: 16px;
+        line-height: 1.6;
+    }
+    .patch-item { margin-bottom: 10px; }
+    .close-hint { font-size: 12px; color: #b2bec3; text-align: center; margin-top: 20px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -67,13 +92,11 @@ def json_oku(dosya):
         with open(dosya, "r", encoding="utf-8") as f: return json.load(f)
     except:
         time.sleep(0.1)
-        try:
-            with open(dosya, "r", encoding="utf-8") as f: return json.load(f)
+        try: with open(dosya, "r", encoding="utf-8") as f: return json.load(f)
         except: return {}
 
 def json_yaz(dosya, veri):
-    try:
-        with open(dosya, "w", encoding="utf-8") as f: json.dump(veri, f, ensure_ascii=False, indent=4)
+    try: with open(dosya, "w", encoding="utf-8") as f: json.dump(veri, f, ensure_ascii=False, indent=4)
     except: pass
 
 def resim_goster(hamle, genislik=130):
@@ -149,7 +172,6 @@ def mac_sonu_hesapla_ai(isim, avatar_rol, zorluk, hedef, sonuc):
     if "ai" not in veriler[isim]: 
         veriler[isim]["ai"] = {"toplam_kupa": 0, "streaks": {}, "warrior_shields": {"Kolay":True,"Orta":True,"Zor":True}, "wins": {"Kolay":0,"Orta":0,"Zor":0}}
     
-    # Eksik anahtar kontrolü
     if "streaks" not in veriler[isim]["ai"]: veriler[isim]["ai"]["streaks"] = {}
     if "wins" not in veriler[isim]["ai"]: veriler[isim]["ai"]["wins"] = {"Kolay":0,"Orta":0,"Zor":0}
     if "warrior_shields" not in veriler[isim]["ai"]: veriler[isim]["ai"]["warrior_shields"] = {"Kolay":True,"Orta":True,"Zor":True}
@@ -194,7 +216,7 @@ def mac_sonu_hesapla_ai(isim, avatar_rol, zorluk, hedef, sonuc):
     json_yaz(SKOR_DOSYASI, veriler)
     return puan, streak_mesaj
 
-# --- PUANLAMA (PVP) ---
+# --- PUANLAMA (PVP) - DÜZELTİLDİ ---
 def mac_sonu_hesapla_pvp(isim, avatar_rol, hedef_set, sonuc):
     veriler = json_oku(SKOR_DOSYASI)
     if isim not in veriler: veriler[isim] = {}
@@ -217,23 +239,33 @@ def mac_sonu_hesapla_pvp(isim, avatar_rol, hedef_set, sonuc):
     json_yaz(SKOR_DOSYASI, veriler)
     return puan
 
-# --- STATE BAŞLATMA ---
+# --- STATE VE OTO-LOGIN BAŞLATMA ---
 if 'sayfa' not in st.session_state:
+    # 1. URL'deki Tokeni Kontrol Et
     token = st.query_params.get("auth")
+    
+    # 2. Eğer URL'de token varsa giriş yapmayı dene
     if token:
         user = token_ile_giris(token)
         if user:
             st.session_state.logged_in = True
             st.session_state.isim = user
+            
+            # Kullanıcı verilerini çek
             v = json_oku(SKOR_DOSYASI)
             if user in v:
                 st.session_state.avatar_rol = v[user].get("avatar_rol")
                 st.session_state.avatar_ikon = AVATARLAR.get(st.session_state.avatar_rol, "👤")
                 st.session_state.sayfa = 'ana_menu'
-            else: st.session_state.sayfa = 'avatar_sec'
-        else: st.session_state.sayfa = 'login'
-    else: st.session_state.sayfa = 'login'
+            else:
+                st.session_state.sayfa = 'avatar_sec'
+        else:
+            # Token geçersizse login'e at
+            st.session_state.sayfa = 'login'
+    else:
+        st.session_state.sayfa = 'login'
 
+# Değişkenleri tanımla
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 if 'isim' not in st.session_state: st.session_state.isim = ""
 if 'avatar_rol' not in st.session_state: st.session_state.avatar_rol = None
@@ -258,7 +290,7 @@ def login_sayfasi():
             if basari:
                 st.session_state.logged_in = True
                 st.session_state.isim = l_user
-                st.session_state.show_patch_notes = True # Giriş yapınca notlar açılsın
+                st.session_state.show_patch_notes = True # Giriş yapınca notları göster
                 veriler = json_oku(SKOR_DOSYASI)
                 if l_user in veriler and "avatar_rol" in veriler[l_user]:
                     rol = veriler[l_user]["avatar_rol"]
@@ -266,7 +298,11 @@ def login_sayfasi():
                     st.session_state.avatar_ikon = AVATARLAR.get(rol, "👤")
                     st.session_state.sayfa = 'ana_menu'
                 else: st.session_state.sayfa = 'avatar_sec'
-                if beni_hatirla: st.query_params["auth"] = token
+                
+                # BENİ HATIRLA ÖZELLİĞİ (URL GÜNCELLEME)
+                if beni_hatirla:
+                    st.query_params["auth"] = token
+                
                 st.rerun()
             else: st.error("Hatalı bilgi!")
     with tab2:
@@ -301,22 +337,30 @@ def avatar_secim_sayfasi():
                 st.rerun()
 
 def ana_menu():
-    # GÜNCELLEME NOTLARI (CSS Pop-up)
+    # --- CSS TABANLI GÜNCELLEME NOTLARI POP-UP ---
     if st.session_state.show_patch_notes:
         st.markdown("""
-        <div class="patch-note-box">
-            <div class="patch-title">📢 GÜNCELLEME NOTLARI SÜRÜM v17</div>
-            <div class="patch-item">🏆 <b>Yeni PvP Kupa Sistemi:</b> Bo3(+3/-3), Bo5(+5/-2), Bo7(+7/-1)</div>
-            <div class="patch-item">📢 <b>Yenilik:</b> Güncelleme notları artık Pop-up olarak açılıyor.</div>
-            <div class="patch-item">🐞 <b>Düzeltme:</b> Karşılıklı modda kupa düşmeme sorunu giderildi.</div>
-            <div class="patch-item">🛡️ <b>Stabilite:</b> "AttributeError" hatası düzeltildi.</div>
+        <div class="modal-overlay">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <span>📢 GÜNCELLEME NOTLARI v18</span>
+                </div>
+                <div class="modal-body">
+                    <div class="patch-item">🔐 <b>Beni Hatırla Düzeltildi:</b> Artık giriş yapınca URL değişir, o linki kaydedersen şifre sormaz.</div>
+                    <div class="patch-item">⚖️ <b>PvP Kupaları:</b> Bo3(+3/-3), Bo5(+5/-2), Bo7(+7/-1) olarak ayarlandı.</div>
+                    <div class="patch-item">📱 <b>Pop-up Tasarımı:</b> Notlar artık şık bir pencerede açılıyor.</div>
+                    <div class="patch-item">⚡ <b>Performans:</b> Kod optimize edildi.</div>
+                </div>
+            </div>
         </div>
         """, unsafe_allow_html=True)
         
-        if st.button("❌ Kapat", key="close_patch"):
-            st.session_state.show_patch_notes = False
-            st.rerun()
-        st.write("---")
+        # Modal kapatma butonu (Streamlit butonu, CSS'in üstüne gelir)
+        col_x1, col_x2 = st.columns([6, 1])
+        with col_x2:
+            if st.button("KAPAT", type="primary", key="close_modal_btn"):
+                st.session_state.show_patch_notes = False
+                st.rerun()
 
     st.markdown(f"<h1 style='text-align: center;'>🗿 📜 ✂️ TAŞ-KAĞIT-MAKAS ARENA</h1>", unsafe_allow_html=True)
     st.markdown(f"<h3 style='text-align: center;'>{st.session_state.avatar_ikon} {st.session_state.isim} ({st.session_state.avatar_rol})</h3>", unsafe_allow_html=True)
@@ -559,7 +603,7 @@ def pvp_oyun():
             mac_sonu_hesapla_pvp(st.session_state.isim, st.session_state.avatar_rol, oda['set_turu'], "kazandi")
             maclar[kod][f"{ben}_odul_alindi"] = True
             json_yaz(MAC_DOSYASI, maclar); st.rerun()
-        elif kazanan != ben and not oda.get(f"{ben}_odul_alindi"): # Kaybeden için puan düşme
+        elif kazanan != ben and not oda.get(f"{ben}_odul_alindi"): # Kaybeden
             mac_sonu_hesapla_pvp(st.session_state.isim, st.session_state.avatar_rol, oda['set_turu'], "kaybetti")
             maclar[kod][f"{ben}_odul_alindi"] = True
             json_yaz(MAC_DOSYASI, maclar); st.rerun()
