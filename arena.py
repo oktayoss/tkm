@@ -4,6 +4,7 @@ import json
 import os
 import time
 import uuid # Token oluşturmak için
+import pandas as pd # Liderlik tablosu için gerekli
 
 # --- SAYFA AYARLARI ---
 st.set_page_config(page_title="Taş Kağıt Makas Arena", page_icon="🗿", layout="centered")
@@ -48,10 +49,16 @@ def json_oku(dosya):
     if not os.path.exists(dosya): return {}
     try:
         with open(dosya, "r", encoding="utf-8") as f: return json.load(f)
-    except: return {}
+    except:
+        time.sleep(0.1) # Kısa bir bekleme ve tekrar deneme (çakışma önleyici)
+        try:
+            with open(dosya, "r", encoding="utf-8") as f: return json.load(f)
+        except: return {}
 
 def json_yaz(dosya, veri):
-    with open(dosya, "w", encoding="utf-8") as f: json.dump(veri, f, ensure_ascii=False, indent=4)
+    try:
+        with open(dosya, "w", encoding="utf-8") as f: json.dump(veri, f, ensure_ascii=False, indent=4)
+    except: pass # Yazma hatası olursa yoksay (nadir durum)
 
 def resim_goster(hamle, genislik=130):
     dosya = f"{hamle.lower()}.png"
@@ -66,7 +73,7 @@ def get_player_data(isim):
 
 def rastgele_soz(durum): return random.choice(SOZLER.get(durum, [""]))
 
-# --- ÜYELİK VE GİRİŞ SİSTEMİ (DÜZELTİLDİ) ---
+# --- ÜYELİK VE GİRİŞ SİSTEMİ ---
 def kullanici_kayit(kadi, sifre):
     users = json_oku(USERS_DOSYASI)
     if kadi in users: return False, "Bu kullanıcı adı dolu."
@@ -78,30 +85,22 @@ def kullanici_kayit(kadi, sifre):
 def kullanici_giris(kadi, sifre):
     users = json_oku(USERS_DOSYASI)
     if kadi not in users: return False, None
-    
     user_data = users[kadi]
-    
-    # HATA DÜZELTME: Eski kayıtlar (string) ve yeni kayıtlar (dict) kontrolü
     if isinstance(user_data, str): # Eski kayıt
         if user_data == sifre:
-            # Hesabı otomatik güncelle
             token = str(uuid.uuid4())
             users[kadi] = {"sifre": sifre, "token": token}
             json_yaz(USERS_DOSYASI, users)
             return True, token
         return False, None
     elif isinstance(user_data, dict): # Yeni kayıt
-        if user_data.get("sifre") == sifre:
-            return True, user_data.get("token")
-            
+        if user_data.get("sifre") == sifre: return True, user_data.get("token")
     return False, None
 
 def token_ile_giris(token):
     users = json_oku(USERS_DOSYASI)
     for kadi, data in users.items():
-        # Sadece sözlük olan verilerde token ara
-        if isinstance(data, dict) and data.get("token") == token:
-            return kadi
+        if isinstance(data, dict) and data.get("token") == token: return kadi
     return None
 
 # --- GİZLİ YÖNETİCİ ---
@@ -111,7 +110,6 @@ if st.query_params.get("mod") == "yonetici":
         st.success("Giriş Yapıldı")
         veriler = json_oku(SKOR_DOSYASI)
         users_db = json_oku(USERS_DOSYASI)
-        
         secilen = st.selectbox("Oyuncu:", ["Seç"] + list(veriler.keys()))
         if secilen != "Seç":
             u = veriler[secilen]
@@ -335,7 +333,8 @@ def ai_giris():
 def ai_oyun():
     s = st.session_state.ai_state
     c1, c2, c3 = st.columns([3, 1, 3])
-    with c1: st.markdown(f"<div class='skor-kutu'><h3>{st.session_state.avatar_ikon}</h3><h1>{s['p_skor']}</h1></div>", unsafe_allow_html=True)
+    # DÜZELTME 1: Kullanıcı adı eklendi
+    with c1: st.markdown(f"<div class='skor-kutu'><h3>{st.session_state.avatar_ikon} {st.session_state.isim}</h3><h1>{s['p_skor']}</h1></div>", unsafe_allow_html=True)
     with c2: st.markdown("<div class='vs-text'>VS</div>", unsafe_allow_html=True)
     with c3: st.markdown(f"<div class='skor-kutu'><h3>{s['pc_ikon']} {s['pc_rol']} (AI)</h3><h1>{s['pc_skor']}</h1></div>", unsafe_allow_html=True)
     st.progress(min(s['p_skor'] / st.session_state.ai_hedef, 1.0))
@@ -582,7 +581,7 @@ def pvp_oyun():
         maclar[kod][f"{ben}_durum"]="cikti"; json_yaz(MAC_DOSYASI, maclar)
         st.session_state.sayfa='pvp_giris'; st.rerun()
 
-# --- LİDERLİK ---
+# --- LİDERLİK (DÜZELTİLDİ 2) ---
 def liderlik_sayfasi(mod):
     baslik = "🤖 YAPAY ZEKA" if mod == 'ai' else "👥 PVP"
     st.title(f"🏆 {baslik} LİDERLİK TABLOSU")
@@ -602,6 +601,7 @@ def liderlik_sayfasi(mod):
             l.append({"Avatar": ikon, "Oyuncu": isim, "🏆 Kupa": d["pvp"].get("toplam_kupa", 0)})
     
     if l:
+        # pd artık tanınıyor
         df = pd.DataFrame(l).sort_values(by="🏆 Kupa", ascending=False)
         df.index = range(1, len(df) + 1)
         st.table(df)
