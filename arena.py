@@ -74,7 +74,8 @@ def json_oku(dosya):
         with open(dosya, "r", encoding="utf-8") as f: return json.load(f)
     except:
         time.sleep(0.1)
-        try: with open(dosya, "r", encoding="utf-8") as f: return json.load(f)
+        try:
+        with open(dosya, "r", encoding="utf-8") as f: return json.load(f)
         except: return {}
 
 def json_yaz(dosya, veri):
@@ -608,3 +609,4 @@ elif st.session_state.sayfa == 'pvp_lobi': pvp_lobi()
 elif st.session_state.sayfa == 'pvp_oyun': pvp_oyun()
 elif st.session_state.sayfa == 'liderlik_ai': liderlik_sayfasi('ai')
 elif st.session_state.sayfa == 'liderlik_pvp': liderlik_sayfasi('pvp')
+
