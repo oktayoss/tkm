@@ -10,8 +10,8 @@ import extra_streamlit_components as stx
 # --- SAYFA AYARLARI ---
 st.set_page_config(page_title="Taş Kağıt Makas Arena", page_icon="🗿", layout="centered")
 
-# --- ÇEREZ YÖNETİCİSİ ---
-cookie_manager = stx.CookieManager(key="cookie_manager_v22")
+# --- ÇEREZ YÖNETİCİSİ (En Başta) ---
+cookie_manager = stx.CookieManager(key="cookie_manager_v23")
 
 # --- CSS STİLLERİ ---
 st.markdown("""
@@ -25,13 +25,27 @@ st.markdown("""
     .savas-sozu { font-style: italic; font-size: 18px; margin-top: 10px; color: #ecf0f1; }
     .kupa-gosterge { background-color: #f1c40f; color: black; padding: 10px; border-radius: 8px; font-weight: bold; text-align: center; margin-bottom: 10px; }
     
-    /* POP-UP STİLİ */
-    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 99999; display: flex; justify-content: center; align-items: center; }
-    .modal-content { background-color: #2d3436; color: #dfe6e9; padding: 30px; border-radius: 15px; width: 90%; max-width: 500px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid #636e72; position: relative; animation: slideIn 0.4s ease-out; text-align: left; }
+    /* POP-UP VE BUTON DÜZELTMESİ */
+    .modal-overlay { 
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+        background: rgba(0,0,0,0.9); z-index: 99990; 
+        display: flex; justify-content: center; align-items: center;
+        flex-direction: column;
+    }
+    .modal-content { 
+        background-color: #2d3436; color: #dfe6e9; padding: 30px; 
+        border-radius: 15px; width: 90%; max-width: 500px; 
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid #636e72; 
+        text-align: left; margin-bottom: 20px;
+    }
     .modal-header { font-size: 24px; font-weight: bold; color: #00cec9; margin-bottom: 20px; border-bottom: 2px solid #0984e3; padding-bottom: 10px; }
     .patch-item { font-size: 16px; margin-bottom: 10px; }
     
-    @keyframes slideIn { from { transform: translateY(-50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    /* KAPAT BUTONUNU EN ÜSTE ZORLA */
+    div.stButton > button:first-child {
+        z-index: 999999 !important; 
+        position: relative;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -41,7 +55,7 @@ SINIF_ACIKLAMALARI = {
     "Okçu": "🎯 **Keskin Göz:** Berabere biten turlarda, maç başına 1 kez beraberliği bozar ve turu kazanır.",
     "Savaşçı": "⚔️ **Çelik İrade:** Her zorluk seviyesi için 1 kez kupa kaybetme cezası almazsın.",
     "Büyücü": "✨ **Mana Koruması:** Kaybetsen bile Galibiyet Serin (Win Streak) hemen bozulmaz.",
-    "Tank": "🚜 **Yıkıcı Güç:** Maç içindeki İLK galibiyetinde rakibe ağır hasar vererek 1 yerine **2 Puan** kazanırsın.",
+    "Tank": "🚜 **Yıkıcı Güç:** Maç içindeki İLK galibiyetinde rakibe 1 yerine **2 Puan** hasar verirsin.",
     "Şifacı": "💖 **Kutsal Kalkan:** Maç içinde İLK kez kaybettiğinde rakip puan kazanamaz (Hasarı yutar)."
 }
 SOZLER = {
@@ -53,27 +67,19 @@ SKOR_DOSYASI = "skorlar_v2.json"
 MAC_DOSYASI = "maclar.json"
 USERS_DOSYASI = "users.json"
 
-# --- FONKSİYONLAR (DÜZELTİLDİ) ---
+# --- FONKSİYONLAR ---
 def json_oku(dosya):
-    if not os.path.exists(dosya):
-        return {}
+    if not os.path.exists(dosya): return {}
     try:
-        with open(dosya, "r", encoding="utf-8") as f:
-            return json.load(f)
+        with open(dosya, "r", encoding="utf-8") as f: return json.load(f)
     except:
         time.sleep(0.1)
-        try:
-            with open(dosya, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except:
-            return {}
+        try: with open(dosya, "r", encoding="utf-8") as f: return json.load(f)
+        except: return {}
 
 def json_yaz(dosya, veri):
-    try:
-        with open(dosya, "w", encoding="utf-8") as f:
-            json.dump(veri, f, ensure_ascii=False, indent=4)
-    except:
-        pass
+    try: with open(dosya, "w", encoding="utf-8") as f: json.dump(veri, f, ensure_ascii=False, indent=4)
+    except: pass
 
 def resim_goster(hamle, genislik=130):
     dosya = f"{hamle.lower()}.png"
@@ -117,48 +123,12 @@ def token_ile_giris(token):
         if isinstance(data, dict) and data.get("token") == token: return kadi
     return None
 
-# --- GİZLİ YÖNETİCİ ---
-if st.query_params.get("mod") == "yonetici":
-    st.title("🔧 Admin Paneli")
-    if st.text_input("Şifre:", type="password") == "dev.tkm":
-        st.success("Giriş Yapıldı")
-        tab_a, tab_b = st.tabs(["Oyuncu Düzenle", "Kullanıcı Logları"])
-        with tab_b:
-            st.subheader("🔐 Kayıtlı Kullanıcılar")
-            users_db = json_oku(USERS_DOSYASI)
-            if users_db:
-                log_data = []
-                for k, v in users_db.items():
-                    pwd = v.get("sifre") if isinstance(v, dict) else v
-                    log_data.append({"Kullanıcı Adı": k, "Şifre": pwd})
-                st.table(pd.DataFrame(log_data))
-            else: st.warning("Kayıtlı kullanıcı yok.")
-        with tab_a:
-            veriler = json_oku(SKOR_DOSYASI)
-            secilen = st.selectbox("Oyuncu:", ["Seç"] + list(veriler.keys()))
-            if secilen != "Seç":
-                u = veriler[secilen]
-                ai_k = st.number_input("AI Kupa", value=u.get("ai", {}).get("toplam_kupa", 0))
-                pvp_k = st.number_input("PvP Kupa", value=u.get("pvp", {}).get("toplam_kupa", 0))
-                if st.button("Değişim Hakkını Geri Ver"):
-                    veriler[secilen]["degisim_hakki"] = 1
-                    json_yaz(SKOR_DOSYASI, veriler); st.success("Hak verildi!")
-                if st.button("Kaydet"):
-                    veriler[secilen]["ai"]["toplam_kupa"] = ai_k
-                    veriler[secilen]["pvp"]["toplam_kupa"] = pvp_k
-                    json_yaz(SKOR_DOSYASI, veriler); st.success("Tamam")
-                if st.button("Sil"):
-                    del veriler[secilen]; json_yaz(SKOR_DOSYASI, veriler)
-                    udb = json_oku(USERS_DOSYASI)
-                    if secilen in udb: del udb[secilen]; json_yaz(USERS_DOSYASI, udb)
-                    st.warning("Silindi"); time.sleep(1); st.rerun()
-    st.stop()
-
 # --- PUANLAMA (AI) ---
 def mac_sonu_hesapla_ai(isim, avatar_rol, zorluk, hedef, sonuc):
     veriler = json_oku(SKOR_DOSYASI)
     if isim not in veriler: veriler[isim] = {}
-    if "ai" not in veriler[isim]: veriler[isim]["ai"] = {"toplam_kupa": 0, "streaks": {}, "warrior_shields": {"Kolay":True,"Orta":True,"Zor":True}, "wins": {"Kolay":0,"Orta":0,"Zor":0}}
+    if "ai" not in veriler[isim]: 
+        veriler[isim]["ai"] = {"toplam_kupa": 0, "streaks": {}, "warrior_shields": {"Kolay":True,"Orta":True,"Zor":True}, "wins": {"Kolay":0,"Orta":0,"Zor":0}}
     
     if "streaks" not in veriler[isim]["ai"]: veriler[isim]["ai"]["streaks"] = {}
     if "wins" not in veriler[isim]["ai"]: veriler[isim]["ai"]["wins"] = {"Kolay":0,"Orta":0,"Zor":0}
@@ -225,26 +195,32 @@ def mac_sonu_hesapla_pvp(isim, avatar_rol, hedef_set, sonuc):
     json_yaz(SKOR_DOSYASI, veriler)
     return puan
 
-# --- OTO-LOGIN ---
+# --- OTO-LOGIN (SAĞLAMLAŞTIRILMIŞ) ---
+# Çerezi okumak bazen zaman alır, o yüzden sayfa başında bekletiyoruz.
 time.sleep(0.1)
-cookie_token = cookie_manager.get(cookie="tkm_auth_token_v21")
-
-if 'sayfa' not in st.session_state:
-    if cookie_token:
-        user = token_ile_giris(cookie_token)
-        if user:
-            st.session_state.logged_in = True; st.session_state.isim = user
-            v = json_oku(SKOR_DOSYASI)
-            if user in v:
-                st.session_state.avatar_rol = v[user].get("avatar_rol")
-                st.session_state.avatar_ikon = AVATARLAR.get(st.session_state.avatar_rol, "👤")
-                st.session_state.sayfa = 'ana_menu'
-            else: st.session_state.sayfa = 'avatar_sec'
-        else: st.session_state.sayfa = 'login'
-    else: st.session_state.sayfa = 'login'
+cookie_token = cookie_manager.get(cookie="tkm_auth_token_v23")
 
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 if 'isim' not in st.session_state: st.session_state.isim = ""
+
+# Eğer çerez varsa ve henüz giriş yapılmadıysa dene
+if cookie_token and not st.session_state.logged_in:
+    user_from_cookie = token_ile_giris(cookie_token)
+    if user_from_cookie:
+        st.session_state.logged_in = True
+        st.session_state.isim = user_from_cookie
+        # Verileri yükle
+        v = json_oku(SKOR_DOSYASI)
+        if user_from_cookie in v:
+            st.session_state.avatar_rol = v[user_from_cookie].get("avatar_rol")
+            st.session_state.avatar_ikon = AVATARLAR.get(st.session_state.avatar_rol, "👤")
+            st.session_state.sayfa = 'ana_menu'
+        else:
+            st.session_state.sayfa = 'avatar_sec'
+        st.rerun()
+
+# Değişkenler
+if 'sayfa' not in st.session_state: st.session_state.sayfa = 'login'
 if 'avatar_rol' not in st.session_state: st.session_state.avatar_rol = None
 if 'avatar_ikon' not in st.session_state: st.session_state.avatar_ikon = None
 if 'ai_state' not in st.session_state: st.session_state.ai_state = {'p_skor': 0, 'pc_skor': 0}
@@ -268,7 +244,10 @@ def login_sayfasi():
                 st.session_state.logged_in = True
                 st.session_state.isim = l_user
                 st.session_state.show_patch_notes = True
-                if beni_hatirla: cookie_manager.set("tkm_auth_token_v21", token, expires_at=None)
+                
+                if beni_hatirla:
+                    cookie_manager.set("tkm_auth_token_v23", token, expires_at=None)
+                
                 veriler = json_oku(SKOR_DOSYASI)
                 if l_user in veriler and "avatar_rol" in veriler[l_user]:
                     rol = veriler[l_user]["avatar_rol"]
@@ -309,21 +288,30 @@ def avatar_secim_sayfasi():
                 st.session_state.sayfa = 'ana_menu'; st.rerun()
 
 def ana_menu():
+    # --- GÜNCELLEME NOTLARI (POP-UP) ---
+    # st.session_state.show_patch_notes True ise, ekranı kaplayan overlay göster
     if st.session_state.show_patch_notes:
         st.markdown("""
         <div class="modal-overlay"><div class="modal-content">
-            <div class="modal-header">📢 GÜNCELLEME NOTLARI v22</div>
+            <div class="modal-header">📢 GÜNCELLEME NOTLARI v23</div>
             <div class="modal-body">
-                <div class="patch-item">🛠️ <b>Hata Düzeltmesi:</b> Site açılış hatası giderildi.</div>
-                <div class="patch-item">🩹 <b>Yeni Sınıf:</b> Şifacı eklendi (PvP & AI uyumlu).</div>
-                <div class="patch-item">🔄 <b>Karakter Değiştirme:</b> 1 Hak eklendi.</div>
-                <div class="patch-item">📝 <b>Admin:</b> Kullanıcı logları eklendi.</div>
+                <div class="patch-item">✅ <b>Hata Düzeltildi:</b> 'Kapat' tuşu artık çalışıyor ve en üstte gözüküyor.</div>
+                <div class="patch-item">🍪 <b>Beni Hatırla:</b> Sayfa yenilense (F5) bile hesabın açık kalır.</div>
+                <div class="patch-item">🩹 <b>Yeni Sınıf:</b> Şifacı eklendi!</div>
+                <div class="patch-item">🔄 <b>Karakter Değişimi:</b> 1 hak verildi.</div>
             </div>
         </div></div>
         """, unsafe_allow_html=True)
-        c1,c2 = st.columns([6,1])
-        with c2: 
-            if st.button("KAPAT", key="close_patch"): st.session_state.show_patch_notes = False; st.rerun()
+        
+        # Butonu ortaya koyuyoruz, CSS ile z-index'i en yüksek yapıldı
+        c1, c2, c3 = st.columns([1, 2, 1])
+        with c2:
+            if st.button("❌ KAPAT VE OYUNA GİR", type="primary"):
+                st.session_state.show_patch_notes = False
+                st.rerun()
+        
+        # Eğer pop-up açıksa, alt tarafı göstermemek için return
+        return
 
     st.markdown(f"<h1 style='text-align: center;'>🗿 📜 ✂️ TAŞ-KAĞIT-MAKAS ARENA</h1>", unsafe_allow_html=True)
     st.markdown(f"<h3 style='text-align: center;'>{st.session_state.avatar_ikon} {st.session_state.isim} ({st.session_state.avatar_rol})</h3>", unsafe_allow_html=True)
@@ -336,7 +324,6 @@ def ana_menu():
         st.markdown("### 👥 Çok Oyunculu")
         if st.button("KARŞILIKLI SAVAŞ (ONLINE)", use_container_width=True): st.session_state.sayfa = 'pvp_giris'; st.rerun()
     
-    # Karakter Değiştirme Butonu
     veriler = json_oku(SKOR_DOSYASI)
     hak = veriler.get(st.session_state.isim, {}).get("degisim_hakki", 1)
     st.write("---")
@@ -344,7 +331,8 @@ def ana_menu():
         if st.button("⬅️ Karakter Değiştir (1 Hakkın Var)", use_container_width=True): st.session_state.sayfa = 'avatar_sec'; st.rerun()
     
     if st.button("🔒 Çıkış Yap", use_container_width=True):
-        st.session_state.logged_in = False; st.session_state.isim = ""; cookie_manager.delete("tkm_auth_token_v21")
+        st.session_state.logged_in = False; st.session_state.isim = ""; 
+        cookie_manager.delete("tkm_auth_token_v23")
         st.session_state.sayfa = 'login'; st.rerun()
 
 # --- AI MODU ---
@@ -391,7 +379,7 @@ def ai_giris():
 def ai_oyun():
     s = st.session_state.ai_state
     c1, c2, c3 = st.columns([3, 1, 3])
-    with c1: st.markdown(f"<div class='skor-kutu'><h3>{st.session_state.avatar_ikon}</h3><h1>{s['p_skor']}</h1></div>", unsafe_allow_html=True)
+    with c1: st.markdown(f"<div class='skor-kutu'><h3>{st.session_state.avatar_ikon} {st.session_state.isim}</h3><h1>{s['p_skor']}</h1></div>", unsafe_allow_html=True)
     with c2: st.markdown("<div class='vs-text'>VS</div>", unsafe_allow_html=True)
     with c3: st.markdown(f"<div class='skor-kutu'><h3>{s['pc_ikon']} (AI)</h3><h1>{s['pc_skor']}</h1></div>", unsafe_allow_html=True)
     st.progress(min(s['p_skor'] / st.session_state.ai_hedef, 1.0))
@@ -439,7 +427,6 @@ def ai_hamle_yap(p_hamle, bilgi_placeholder):
         elif pc_rol == "Okçu" and not s['pc_okcu_hak']: s['pc_skor']+=1; s['pc_okcu_hak']=True; tur_sonuc="kaybetti"; s['mesaj']="🏹 AI OKÇU!"
         else: tur_sonuc="berabere"; s['mesaj']="🤝 BERABERE"
     elif kazanan[p_hamle] == pc_hamle:
-        # PC Şifacı mı?
         if pc_rol == "Şifacı" and s['pc_sifaci_hak']: s['pc_sifaci_hak']=False; s['mesaj']="🩹 AI ŞİFACI HASARI ENGELLEDİ!"; tur_sonuc="kazandi" # Puan yok
         else:
             puan = 2 if (my_rol == "Tank" and s['tank_hak']) else 1
@@ -447,7 +434,6 @@ def ai_hamle_yap(p_hamle, bilgi_placeholder):
             else: s['mesaj'] = "✅ KAZANDIN!"
             s['p_skor']+=puan; tur_sonuc="kazandi"
     else:
-        # Ben Şifacı mıyım?
         if my_rol == "Şifacı" and s['sifaci_hak']: s['sifaci_hak']=False; s['mesaj']="🩹 ŞİFACI KALKANI!"; tur_sonuc="kaybetti" # Puan yok
         else:
             puan = 2 if (pc_rol == "Tank" and s['pc_tank_hak']) else 1
@@ -482,7 +468,8 @@ def pvp_giris():
                 "p1": st.session_state.isim, "p1_avatar": st.session_state.avatar_ikon, "p1_rol": st.session_state.avatar_rol,
                 "p2": None, "p2_avatar": None, "p2_rol": None,
                 "p1_puan": 0, "p2_puan": 0, "hedef": (hs // 2) + 1, "set_turu": hs,
-                "p1_hamle": None, "p2_hamle": None, "p1_durum": "oynuyor", "p2_durum": "bekliyor", "son_mesaj": "...",
+                "p1_hamle": None, "p2_hamle": None,
+                "p1_durum": "oynuyor", "p2_durum": "bekliyor", "son_mesaj": "...",
                 "p1_tank": True, "p2_tank": True, "p1_sifaci": True, "p2_sifaci": True, "p1_okcu": True, "p2_okcu": True
             }
             json_yaz(MAC_DOSYASI, maclar)
@@ -592,13 +579,18 @@ def liderlik_sayfasi(mod):
         rol = d.get("avatar_rol", "Bilinmiyor"); ikon = AVATARLAR.get(rol, "👤")
         if mod == 'ai' and "ai" in d:
             ai_d = d["ai"]
-            l.append({"Avatar": ikon, "Oyuncu": isim, "🏆 Kupa": ai_d.get("toplam_kupa", 0)})
+            l.append({
+                "Avatar": ikon, "Oyuncu": isim, "🏆 Kupa": ai_d.get("toplam_kupa", 0),
+                "Kolay W": ai_d.get("wins", {}).get("Kolay", 0),
+                "Orta W": ai_d.get("wins", {}).get("Orta", 0),
+                "Zor W": ai_d.get("wins", {}).get("Zor", 0)
+            })
         elif mod == 'pvp' and "pvp" in d:
             l.append({"Avatar": ikon, "Oyuncu": isim, "🏆 Kupa": d["pvp"].get("toplam_kupa", 0)})
     
     if l:
         df = pd.DataFrame(l).sort_values(by="🏆 Kupa", ascending=False)
-        df.insert(0, "Rank", range(1, len(df) + 1)); df.set_index("Rank", inplace=True)
+        df.index = range(1, len(df) + 1)
         st.table(df)
     else: st.warning("Veri yok.")
     
