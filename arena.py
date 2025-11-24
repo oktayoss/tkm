@@ -11,7 +11,7 @@ import extra_streamlit_components as stx
 st.set_page_config(page_title="Taş Kağıt Makas Arena", page_icon="🗿", layout="centered")
 
 # --- ÇEREZ YÖNETİCİSİ ---
-cookie_manager = stx.CookieManager(key="cookie_manager_v26")
+cookie_manager = stx.CookieManager(key="cookie_manager_v26_1")
 
 # --- CSS STİLLERİ ---
 st.markdown("""
@@ -93,13 +93,13 @@ def resim_goster(hamle, genislik=130):
 
 def get_player_data(isim):
     veriler = json_oku(SKOR_DOSYASI)
-    # Veri tamamlama (Coin ve Max Kupa için)
+    # Veri tamamlama
     if isim in veriler:
         if "coin" not in veriler[isim]: veriler[isim]["coin"] = 10
         if "max_ai_kupa" not in veriler[isim]: veriler[isim]["max_ai_kupa"] = 0
         if "max_pvp_kupa" not in veriler[isim]: veriler[isim]["max_pvp_kupa"] = 0
         if "degisim_hakki" not in veriler[isim]: veriler[isim]["degisim_hakki"] = 1
-        if "degisim_sayaci" not in veriler[isim]: veriler[isim]["degisim_sayaci"] = 0 # Fiyatlandırma için
+        if "degisim_sayaci" not in veriler[isim]: veriler[isim]["degisim_sayaci"] = 0
         json_yaz(SKOR_DOSYASI, veriler)
     return veriler.get(isim)
 
@@ -141,7 +141,7 @@ def token_ile_giris(token):
 if st.query_params.get("mod") == "yonetici":
     st.title("🔧 Admin Paneli (HUGE UPDATE)")
     if st.text_input("Şifre:", type="password") == "dev.tkm":
-        st.success("Yetki Tamam")
+        st.success("Giriş Yapıldı")
         tab1, tab2, tab3 = st.tabs(["Tekil İşlem", "Global İşlem", "Loglar"])
         
         veriler = json_oku(SKOR_DOSYASI)
@@ -156,14 +156,22 @@ if st.query_params.get("mod") == "yonetici":
                     yeni_coin = st.number_input("Coin Miktarı", value=u.get("coin", 10))
                     yeni_hak = st.number_input("Değişim Hakkı", value=u.get("degisim_hakki", 0))
                 with c2:
-                    if st.button("Kaydet (Tekil)"):
-                        veriler[secilen]["coin"] = yeni_coin
-                        veriler[secilen]["degisim_hakki"] = yeni_hak
-                        json_yaz(SKOR_DOSYASI, veriler); st.success("Kaydedildi")
-                    if st.button("Sil (Tekil)"):
-                        del veriler[secilen]; json_yaz(SKOR_DOSYASI, veriler)
-                        if secilen in users_db: del users_db[secilen]; json_yaz(USERS_DOSYASI, users_db)
-                        st.warning("Silindi"); time.sleep(1); st.rerun()
+                    yeni_ai_kupa = st.number_input("AI Kupası", value=u.get("ai", {}).get("toplam_kupa", 0))
+                    yeni_pvp_kupa = st.number_input("PvP Kupası", value=u.get("pvp", {}).get("toplam_kupa", 0))
+                
+                if st.button("Kaydet (Tekil)"):
+                    veriler[secilen]["coin"] = yeni_coin
+                    veriler[secilen]["degisim_hakki"] = yeni_hak
+                    if "ai" not in veriler[secilen]: veriler[secilen]["ai"] = {}
+                    if "pvp" not in veriler[secilen]: veriler[secilen]["pvp"] = {}
+                    veriler[secilen]["ai"]["toplam_kupa"] = yeni_ai_kupa
+                    veriler[secilen]["pvp"]["toplam_kupa"] = yeni_pvp_kupa
+                    json_yaz(SKOR_DOSYASI, veriler); st.success("Kaydedildi")
+                
+                if st.button("Sil (Tekil)"):
+                    del veriler[secilen]; json_yaz(SKOR_DOSYASI, veriler)
+                    if secilen in users_db: del users_db[secilen]; json_yaz(USERS_DOSYASI, users_db)
+                    st.warning("Silindi"); time.sleep(1); st.rerun()
         
         with tab2:
             st.warning("⚠️ BU İŞLEM TÜM OYUNCULARI ETKİLER!")
@@ -188,13 +196,11 @@ def mac_sonu_hesapla_ai(isim, avatar_rol, zorluk, hedef, sonuc):
     veriler = json_oku(SKOR_DOSYASI)
     if isim not in veriler: veriler[isim] = {}
     
-    # Veri Hazırlığı
     if "ai" not in veriler[isim]: 
         veriler[isim]["ai"] = {"toplam_kupa": 0, "streaks": {}, "warrior_shields": {"Kolay":True,"Orta":True,"Zor":True}, "wins": {"Kolay":0,"Orta":0,"Zor":0}}
     if "coin" not in veriler[isim]: veriler[isim]["coin"] = 10
     if "max_ai_kupa" not in veriler[isim]: veriler[isim]["max_ai_kupa"] = 0
 
-    # Eksik anahtarlar
     if "streaks" not in veriler[isim]["ai"]: veriler[isim]["ai"]["streaks"] = {}
     if "wins" not in veriler[isim]["ai"]: veriler[isim]["ai"]["wins"] = {"Kolay":0,"Orta":0,"Zor":0}
     if "warrior_shields" not in veriler[isim]["ai"]: veriler[isim]["ai"]["warrior_shields"] = {"Kolay":True,"Orta":True,"Zor":True}
@@ -238,15 +244,11 @@ def mac_sonu_hesapla_ai(isim, avatar_rol, zorluk, hedef, sonuc):
     player_ai["streaks"][streak_key] = streak
     player_ai["toplam_kupa"] += puan
     
-    # COIN HESAPLAMA (AI: 50 Barajı)
+    # COIN
     yeni_toplam = player_ai["toplam_kupa"]
     eski_max = veriler[isim]["max_ai_kupa"]
-    
     if yeni_toplam > eski_max:
         veriler[isim]["max_ai_kupa"] = yeni_toplam
-        # Her 50 kupada coin
-        # Örn: Eski 40, Yeni 55 -> 50 barajı geçildi.
-        # Örn: Eski 90, Yeni 110 -> 100 barajı geçildi.
         if (yeni_toplam // 50) > (eski_max // 50):
             veriler[isim]["coin"] += 10
             coin_kazandi = True
@@ -276,7 +278,6 @@ def mac_sonu_hesapla_pvp(isim, avatar_rol, hedef_set, sonuc):
     
     veriler[isim]["pvp"]["toplam_kupa"] += puan
     
-    # COIN HESAPLAMA (PvP: 25 Barajı)
     yeni_toplam = veriler[isim]["pvp"]["toplam_kupa"]
     eski_max = veriler[isim]["max_pvp_kupa"]
     coin_kazandi = False
@@ -292,7 +293,7 @@ def mac_sonu_hesapla_pvp(isim, avatar_rol, hedef_set, sonuc):
 
 # --- OTO-LOGIN ---
 time.sleep(0.1)
-cookie_token = cookie_manager.get(cookie="tkm_auth_token_v26")
+cookie_token = cookie_manager.get(cookie="tkm_auth_token_v26_1")
 
 if 'sayfa' not in st.session_state:
     if cookie_token:
@@ -315,7 +316,7 @@ if 'avatar_ikon' not in st.session_state: st.session_state.avatar_ikon = None
 if 'ai_state' not in st.session_state: st.session_state.ai_state = {}
 if 'oda_kodu' not in st.session_state: st.session_state.oda_kodu = None
 if 'show_patch_notes' not in st.session_state: st.session_state.show_patch_notes = False
-if 'magaza_mod' not in st.session_state: st.session_state.magaza_mod = "ana" # ana, onayla
+if 'magaza_mod' not in st.session_state: st.session_state.magaza_mod = "ana"
 
 # ==========================
 # SAYFALAR
@@ -332,13 +333,11 @@ def login_sayfasi():
             basari, token = kullanici_giris(l_user, l_pass)
             if basari:
                 st.session_state.logged_in = True; st.session_state.isim = l_user; st.session_state.show_patch_notes = True
-                if beni_hatirla: cookie_manager.set("tkm_auth_token_v26", token, expires_at=None)
+                if beni_hatirla: cookie_manager.set("tkm_auth_token_v26_1", token, expires_at=None)
                 veriler = json_oku(SKOR_DOSYASI)
                 if l_user in veriler:
-                    # Eski hesaplara coin ekle (Eğer yoksa)
                     if "coin" not in veriler[l_user]: veriler[l_user]["coin"] = 10
                     json_yaz(SKOR_DOSYASI, veriler)
-                    
                     if "avatar_rol" in veriler[l_user]:
                         rol = veriler[l_user]["avatar_rol"]
                         st.session_state.avatar_rol = rol; st.session_state.avatar_ikon = AVATARLAR.get(rol, "👤")
@@ -361,7 +360,6 @@ def avatar_secim_sayfasi():
     st.title(f"🛡️ Hoşgeldin {st.session_state.isim}!")
     st.info("Sınıfını seç!")
     
-    # Fiyatlandırma Mantığı
     veriler = json_oku(SKOR_DOSYASI)
     user_data = veriler.get(st.session_state.isim, {})
     degisim_sayaci = user_data.get("degisim_sayaci", 0)
@@ -371,7 +369,6 @@ def avatar_secim_sayfasi():
     if degisim_hakki > 0:
         st.success(f"🎫 {degisim_hakki} adet Değişim Hakkın var (Ücretsiz)")
     else:
-        # Hakkı yoksa parayla: 5, 10, 20, 40...
         fiyat = 5 * (2 ** degisim_sayaci)
         st.warning(f"💰 Değişim Ücreti: {fiyat} Coin (Hak bitti)")
 
@@ -383,37 +380,36 @@ def avatar_secim_sayfasi():
             st.info(SINIF_ACIKLAMALARI[rol])
             if st.button(f"SEÇ: {rol}", key=f"btn_{rol}", use_container_width=True):
                 if st.session_state.isim not in veriler:
-                    # İlk kayıt
                     veriler[st.session_state.isim] = {"avatar_rol": rol, "degisim_hakki": 0, "degisim_sayaci": 0, "coin": 10, "ai": {"toplam_kupa":0}, "pvp": {"toplam_kupa":0}}
                 else:
-                    # Değişim işlemi
                     if degisim_hakki > 0:
                          veriler[st.session_state.isim]["degisim_hakki"] -= 1
                     else:
-                         # Para kontrolü
                          if user_data.get("coin", 0) >= fiyat:
                              veriler[st.session_state.isim]["coin"] -= fiyat
                              veriler[st.session_state.isim]["degisim_sayaci"] += 1
                          else:
                              st.error("Yetersiz Coin!"); return
-                             
                     veriler[st.session_state.isim]["avatar_rol"] = rol
                 
                 json_yaz(SKOR_DOSYASI, veriler)
                 st.session_state.avatar_rol = rol; st.session_state.avatar_ikon = ikon
                 st.session_state.sayfa = 'ana_menu'; st.rerun()
+    
+    st.write("---")
+    if st.button("🏠 Vazgeç ve Ana Menüye Dön", use_container_width=True):
+        st.session_state.sayfa = 'ana_menu'; st.rerun()
 
 def ana_menu():
     # --- POP-UP ---
     if st.session_state.show_patch_notes:
         st.markdown("""
         <div class="patch-container">
-            <div class="patch-title">📢 HUGE UPDATE v26</div>
-            <div class="patch-item">🪙 <b>Coin Sistemi:</b> Artık her 50 (AI) ve 25 (PvP) kupada 10 Coin kazanıyorsun!</div>
-            <div class="patch-item">🎁 <b>Mağaza:</b> Eğlence Sandığı açıp Karakter Değiştirme Hakkı kazanabilirsin.</div>
-            <div class="patch-item">🔄 <b>Değişim:</b> Hakların bitince Coin ile (5, 10, 20...) karakter değişebilirsin.</div>
-            <div class="patch-item">🩹 <b>Şifacı:</b> Tüm modlarda aktif.</div>
-            <div class="patch-item">🔧 <b>Admin:</b> Toplu hediye gönderme özelliği eklendi.</div>
+            <div class="patch-title">📢 Fixed Huge Update v26.1</div>
+            <div class="patch-item">🛠️ <b>Hata Düzeltmeleri:</b> Site açılış sorunları ve sandık animasyonları düzeltildi.</div>
+            <div class="patch-item">🎁 <b>Yeni Sandık:</b> Artık sandık açılırken emoji animasyonu var (Balonlar kalktı).</div>
+            <div class="patch-item">🔧 <b>Admin Paneli:</b> Kupa düzenleme özelliği geri geldi.</div>
+            <div class="patch-item">🔙 <b>Karakter Seçimi:</b> Vazgeçme butonu eklendi.</div>
         </div>
         """, unsafe_allow_html=True)
         c1, c2, c3 = st.columns([1,2,1])
@@ -422,7 +418,6 @@ def ana_menu():
                 st.session_state.show_patch_notes = False; st.rerun()
         return
 
-    # Coin Göstergesi
     data = get_player_data(st.session_state.isim)
     coin = data.get("coin", 10) if data else 10
     
@@ -448,7 +443,7 @@ def ana_menu():
     if st.button("⬅️ Karakter Değiştir", use_container_width=True): st.session_state.sayfa = 'avatar_sec'; st.rerun()
     
     if st.button("🔒 Çıkış Yap", use_container_width=True):
-        st.session_state.logged_in = False; st.session_state.isim = ""; cookie_manager.delete("tkm_auth_token_v26")
+        st.session_state.logged_in = False; st.session_state.isim = ""; cookie_manager.delete("tkm_auth_token_v26_1")
         st.session_state.sayfa = 'login'; st.rerun()
 
 # --- MAĞAZA SAYFASI ---
@@ -479,13 +474,21 @@ def magaza_sayfasi():
                     veriler = json_oku(SKOR_DOSYASI)
                     veriler[st.session_state.isim]["coin"] -= 25
                     
-                    # Şans
+                    # ANİMASYON KISMI (YENİ)
+                    anim_box = st.empty()
+                    anim_box.markdown("<div style='font-size:100px; text-align:center'>📦</div>", unsafe_allow_html=True)
+                    time.sleep(0.8)
+                    anim_box.markdown("<div style='font-size:100px; text-align:center'>⏳</div>", unsafe_allow_html=True)
+                    time.sleep(0.8)
+                    anim_box.markdown("<div style='font-size:100px; text-align:center'>🔓</div>", unsafe_allow_html=True)
+                    time.sleep(0.5)
+                    anim_box.empty()
+
                     odul = random.choices([1, 2, 3], weights=[60, 30, 10])[0]
                     veriler[st.session_state.isim]["degisim_hakki"] += odul
                     json_yaz(SKOR_DOSYASI, veriler)
                     
-                    st.balloons()
-                    st.success(f"Tebrikler! Sandıktan {odul} adet Değişim Hakkı (🎫) çıktı!")
+                    st.success(f"✨ Tebrikler! Sandıktan {odul} adet Değişim Hakkı (🎫) çıktı!")
                     time.sleep(2)
                 else:
                     st.error("Yetersiz Bakiye!")
@@ -516,7 +519,6 @@ def ai_giris():
     if st.button("⚔️ BAŞLA", use_container_width=True):
         st.session_state.ai_zorluk = zorluk; st.session_state.ai_hedef = hedef
         pc_rol = random.choice(list(AVATARLAR.keys()))
-        # Şifacı hakkı init
         st.session_state.ai_state = {'p_skor': 0, 'pc_skor': 0, 'mesaj': "Başla!", 'soz': "", 'bitti': False, 
                                      'okcu_hak': False, 'pc_okcu_hak': False, 'tank_hak': True, 'pc_tank_hak': True, 
                                      'sifaci_hak': True, 'pc_sifaci_hak': True, 
@@ -550,7 +552,6 @@ def ai_oyun():
         c1, c2 = st.columns(2)
         with c1:
             if st.button("🔄 TEKRAR", use_container_width=True): 
-                # Reset
                 st.session_state.ai_state.update({'bitti':False, 'p_skor':0, 'pc_skor':0, 'okcu_hak':False, 'tank_hak':True, 'sifaci_hak':True})
                 st.rerun()
         with c2:
@@ -699,7 +700,7 @@ def pvp_oyun():
         
         baslik = "✅ KAZANDIN!" if kazanan == ben else "❌ KAYBETTİN..."
         st.markdown(f"<h1>{baslik}</h1>", unsafe_allow_html=True)
-        if st.button("Çık"): maclar[kod][f"{ben}_durum"]="cikti"; json_yaz(MAC_DOSYASI, maclar); st.session_state.sayfa='pvp_giris'; st.rerun()
+        if st.button("Çık"): maclar[kod][f"{ben}_durum"]="cikti"; json_yaz(MAC_DOSYASI, maclar); st.session_state.sayfa='ana_menu'; st.rerun()
         return
 
     st.write("---")
@@ -716,6 +717,7 @@ def pvp_oyun():
         if (p1h=="Taş" and p2h=="Makas") or (p1h=="Kağıt" and p2h=="Taş") or (p1h=="Makas" and p2h=="Kağıt"): kazanan="p1"
         elif p1h!=p2h: kazanan="p2"
         
+        # PVP Yetenek Mantığı
         p1_rol = oda["p1_rol"]; p2_rol = oda["p2_rol"]
         
         if kazanan == "berabere":
