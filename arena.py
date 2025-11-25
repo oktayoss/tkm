@@ -11,7 +11,7 @@ import extra_streamlit_components as stx
 st.set_page_config(page_title="Taş Kağıt Makas Arena", page_icon="🗿", layout="centered")
 
 # --- ÇEREZ YÖNETİCİSİ ---
-cookie_manager = stx.CookieManager(key="cookie_manager_v26_1")
+cookie_manager = stx.CookieManager(key="cookie_manager_v27")
 
 # --- CSS STİLLERİ ---
 st.markdown("""
@@ -106,6 +106,27 @@ def get_player_data(isim):
 def rastgele_soz(durum):
     return random.choice(SOZLER.get(durum, [""]))
 
+# --- YEDEKLEME SİSTEMİ (PERSISTENCE) ---
+def yedek_al():
+    # Verileri JSON string olarak döndürür
+    data = {
+        "skorlar": json_oku(SKOR_DOSYASI),
+        "users": json_oku(USERS_DOSYASI)
+    }
+    return json.dumps(data, ensure_ascii=False, indent=4)
+
+def yedek_yukle(uploaded_file):
+    if uploaded_file is not None:
+        try:
+            data = json.load(uploaded_file)
+            if "skorlar" in data and "users" in data:
+                json_yaz(SKOR_DOSYASI, data["skorlar"])
+                json_yaz(USERS_DOSYASI, data["users"])
+                return True
+        except:
+            return False
+    return False
+
 # --- ÜYELİK SİSTEMİ ---
 def kullanici_kayit(kadi, sifre):
     users = json_oku(USERS_DOSYASI)
@@ -139,10 +160,10 @@ def token_ile_giris(token):
 
 # --- GİZLİ YÖNETİCİ ---
 if st.query_params.get("mod") == "yonetici":
-    st.title("🔧 Admin Paneli (HUGE UPDATE)")
+    st.title("🔧 Admin Paneli (V27)")
     if st.text_input("Şifre:", type="password") == "dev.tkm":
         st.success("Giriş Yapıldı")
-        tab1, tab2, tab3 = st.tabs(["Tekil İşlem", "Global İşlem", "Loglar"])
+        tab1, tab2, tab3, tab4 = st.tabs(["Tekil İşlem", "Global İşlem", "Loglar", "Yedekleme"])
         
         veriler = json_oku(SKOR_DOSYASI)
         users_db = json_oku(USERS_DOSYASI)
@@ -189,6 +210,25 @@ if st.query_params.get("mod") == "yonetici":
                 log_data = [{"User": k, "Pass": v.get("sifre") if isinstance(v, dict) else v} for k,v in users_db.items()]
                 st.table(pd.DataFrame(log_data))
             else: st.warning("Kayıt yok.")
+
+        with tab4:
+            st.subheader("💾 Veri Yedekleme")
+            st.warning("Sunucu sıfırlanırsa veriler silinir. Düzenli yedek al!")
+            
+            # İndirme
+            backup_data = yedek_al()
+            st.download_button("⬇️ YEDEĞİ İNDİR (JSON)", backup_data, file_name="tkm_yedek.json")
+            
+            # Yükleme
+            uploaded = st.file_uploader("⬆️ YEDEĞİ GERİ YÜKLE", type="json")
+            if uploaded is not None:
+                if st.button("Yedeği Yükle ve Uygula"):
+                    if yedek_yukle(uploaded):
+                        st.success("Yedek başarıyla yüklendi!")
+                        time.sleep(1); st.rerun()
+                    else:
+                        st.error("Dosya formatı hatalı.")
+
     st.stop()
 
 # --- PUANLAMA (AI) ---
@@ -196,11 +236,13 @@ def mac_sonu_hesapla_ai(isim, avatar_rol, zorluk, hedef, sonuc):
     veriler = json_oku(SKOR_DOSYASI)
     if isim not in veriler: veriler[isim] = {}
     
+    # Veri Hazırlığı
     if "ai" not in veriler[isim]: 
         veriler[isim]["ai"] = {"toplam_kupa": 0, "streaks": {}, "warrior_shields": {"Kolay":True,"Orta":True,"Zor":True}, "wins": {"Kolay":0,"Orta":0,"Zor":0}}
     if "coin" not in veriler[isim]: veriler[isim]["coin"] = 10
     if "max_ai_kupa" not in veriler[isim]: veriler[isim]["max_ai_kupa"] = 0
 
+    # Eksik anahtarlar
     if "streaks" not in veriler[isim]["ai"]: veriler[isim]["ai"]["streaks"] = {}
     if "wins" not in veriler[isim]["ai"]: veriler[isim]["ai"]["wins"] = {"Kolay":0,"Orta":0,"Zor":0}
     if "warrior_shields" not in veriler[isim]["ai"]: veriler[isim]["ai"]["warrior_shields"] = {"Kolay":True,"Orta":True,"Zor":True}
@@ -213,7 +255,7 @@ def mac_sonu_hesapla_ai(isim, avatar_rol, zorluk, hedef, sonuc):
     coin_kazandi = False
 
     if sonuc == "kazandi":
-        player_ai["wins"][zorluk] += 1
+        player_ai["wins"][zorluk] = player_ai["wins"].get(zorluk, 0) + 1
         base = {"Kolay": 1, "Orta": 5, "Zor": 10}
         carpan = {3: 1, 5: 2, 7: 3}
         puan = base[zorluk] * carpan[hedef]
@@ -293,7 +335,7 @@ def mac_sonu_hesapla_pvp(isim, avatar_rol, hedef_set, sonuc):
 
 # --- OTO-LOGIN ---
 time.sleep(0.1)
-cookie_token = cookie_manager.get(cookie="tkm_auth_token_v26_1")
+cookie_token = cookie_manager.get(cookie="tkm_auth_token_v27")
 
 if 'sayfa' not in st.session_state:
     if cookie_token:
@@ -324,6 +366,19 @@ if 'magaza_mod' not in st.session_state: st.session_state.magaza_mod = "ana"
 
 def login_sayfasi():
     st.markdown("<h1 style='text-align: center;'>🔐 TAŞ KAĞIT MAKAS ARENA</h1>", unsafe_allow_html=True)
+    st.info("⚠️ Streamlit sunucusu sıfırlanırsa veriler silinebilir. Sık sık yedek al!")
+    
+    # YEDEKLEME KISMI (GİRİŞ EKRANINDA)
+    with st.expander("💾 Veri Kurtarma (Yedekten Yükle)"):
+        uploaded = st.file_uploader("Eski yedeğinizi yükleyin:", type="json")
+        if uploaded is not None:
+            if st.button("Yedeği Yükle"):
+                if yedek_yukle(uploaded):
+                    st.success("Yedek yüklendi! Şimdi giriş yapabilirsin.")
+                    time.sleep(1); st.rerun()
+                else:
+                    st.error("Hatalı dosya.")
+
     tab1, tab2 = st.tabs(["Giriş Yap", "Kayıt Ol"])
     with tab1:
         l_user = st.text_input("Kullanıcı Adı", key="l_user")
@@ -333,7 +388,7 @@ def login_sayfasi():
             basari, token = kullanici_giris(l_user, l_pass)
             if basari:
                 st.session_state.logged_in = True; st.session_state.isim = l_user; st.session_state.show_patch_notes = True
-                if beni_hatirla: cookie_manager.set("tkm_auth_token_v26_1", token, expires_at=None)
+                if beni_hatirla: cookie_manager.set("tkm_auth_token_v27", token, expires_at=None)
                 veriler = json_oku(SKOR_DOSYASI)
                 if l_user in veriler:
                     if "coin" not in veriler[l_user]: veriler[l_user]["coin"] = 10
@@ -405,11 +460,10 @@ def ana_menu():
     if st.session_state.show_patch_notes:
         st.markdown("""
         <div class="patch-container">
-            <div class="patch-title">📢 Fixed Huge Update v26.1</div>
-            <div class="patch-item">🛠️ <b>Hata Düzeltmeleri:</b> Site açılış sorunları ve sandık animasyonları düzeltildi.</div>
-            <div class="patch-item">🎁 <b>Yeni Sandık:</b> Artık sandık açılırken emoji animasyonu var (Balonlar kalktı).</div>
-            <div class="patch-item">🔧 <b>Admin Paneli:</b> Kupa düzenleme özelliği geri geldi.</div>
-            <div class="patch-item">🔙 <b>Karakter Seçimi:</b> Vazgeçme butonu eklendi.</div>
+            <div class="patch-title">📢 GÜNCELLEME NOTLARI v27</div>
+            <div class="patch-item">💾 <b>Yedekleme Sistemi:</b> Veriler silinmesin diye giriş ekranına 'Yedekle/Yükle' eklendi.</div>
+            <div class="patch-item">📊 <b>Detaylı Tablo:</b> AI liderlik tablosunda Kolay/Orta/Zor galibiyetleri artık görünüyor.</div>
+            <div class="patch-item">🎁 <b>Mağaza:</b> Coin kazanma ve harcama sistemi aktif.</div>
         </div>
         """, unsafe_allow_html=True)
         c1, c2, c3 = st.columns([1,2,1])
@@ -443,8 +497,14 @@ def ana_menu():
     if st.button("⬅️ Karakter Değiştir", use_container_width=True): st.session_state.sayfa = 'avatar_sec'; st.rerun()
     
     if st.button("🔒 Çıkış Yap", use_container_width=True):
-        st.session_state.logged_in = False; st.session_state.isim = ""; cookie_manager.delete("tkm_auth_token_v26_1")
+        st.session_state.logged_in = False; st.session_state.isim = ""; cookie_manager.delete("tkm_auth_token_v27")
         st.session_state.sayfa = 'login'; st.rerun()
+    
+    # YEDEKLEME BUTONU (ANA MENÜDE DE OLSUN)
+    with st.expander("💾 Verilerini Yedekle (İndir)"):
+        st.write("Sunucu sıfırlanmadan önce verilerini indir!")
+        backup = yedek_al()
+        st.download_button("⬇️ YEDEĞİ İNDİR", backup, file_name="tkm_yedek.json")
 
 # --- MAĞAZA SAYFASI ---
 def magaza_sayfasi():
@@ -474,7 +534,7 @@ def magaza_sayfasi():
                     veriler = json_oku(SKOR_DOSYASI)
                     veriler[st.session_state.isim]["coin"] -= 25
                     
-                    # ANİMASYON KISMI (YENİ)
+                    # ANİMASYON
                     anim_box = st.empty()
                     anim_box.markdown("<div style='font-size:100px; text-align:center'>📦</div>", unsafe_allow_html=True)
                     time.sleep(0.8)
@@ -673,7 +733,8 @@ def pvp_oyun():
     maclar = json_oku(MAC_DOSYASI); oda = maclar.get(kod)
     if not oda: st.session_state.sayfa='pvp_giris'; st.rerun(); return
     
-    if oda[f"{rakip}_durum"] == "cikti": st.error("Rakip gitti."); time.sleep(2); st.session_state.sayfa='ana_menu'; st.rerun(); return
+    r_durum = oda.get(f"{rakip}_durum")
+    if r_durum == "cikti": st.error("Rakip gitti."); time.sleep(2); st.session_state.sayfa='ana_menu'; st.rerun(); return
     if (oda[f"{ben}_hamle"] and not oda[f"{rakip}_hamle"]): time.sleep(2); st.rerun()
 
     c1,c2,c3 = st.columns([3,1,3])
@@ -753,7 +814,7 @@ def liderlik_sayfasi(mod):
         coin = d.get("coin", 0)
         if mod == 'ai' and "ai" in d:
             ai_d = d["ai"]
-            l.append({"Avatar": ikon, "Oyuncu": isim, "🏆 Kupa": ai_d.get("toplam_kupa", 0), "🪙 Coin": coin})
+            l.append({"Avatar": ikon, "Oyuncu": isim, "🏆 Kupa": ai_d.get("toplam_kupa", 0), "🪙 Coin": coin, "Kolay W": ai_d.get("wins", {}).get("Kolay", 0), "Orta W": ai_d.get("wins", {}).get("Orta", 0), "Zor W": ai_d.get("wins", {}).get("Zor", 0)})
         elif mod == 'pvp' and "pvp" in d:
             l.append({"Avatar": ikon, "Oyuncu": isim, "🏆 Kupa": d["pvp"].get("toplam_kupa", 0), "🪙 Coin": coin})
     
